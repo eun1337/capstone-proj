@@ -2,6 +2,7 @@
 convert_zipcode_dtype.py
 
 설명: 우편번호 컬럼을 문자열로 변환하여 앞자리 0 손실을 방지합니다.
+      숫자로 저장되어 앞자리 0이 소실된 경우 zfill(5)로 복원합니다.
       매입 테이블: '공급업체 우편번호'
       매출 테이블: '매출처 우편번호'
 """
@@ -33,9 +34,9 @@ for fname, zip_col in FILE_ZIPCODE_COL.items():
         if pd.isna(x) or str(x).strip() in ("", "nan"):
             return ""
         try:
-            return str(int(float(x)))
+            return str(int(float(x))).zfill(5)  # 앞에 0붙여 5자리로 복원
         except Exception:
-            return str(x).strip()
+            return str(x).strip().zfill(5)
 
     df[zip_col] = df[zip_col].apply(to_zipcode_str)
     df.to_parquet(path, index=False, engine="pyarrow")

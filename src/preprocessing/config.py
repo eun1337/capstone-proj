@@ -15,6 +15,7 @@ config.py
 7. drop_optioncode_col.py  - 옵션 열 삭제
 8. drop_invalid_purchase_row.py - 매입 부호 이상 데이터 삭제
 9. drop_invalid_sales_row.py    - 매출 부호 이상 데이터 삭제
+10. drop_invalid_zipcode_barcode.py   - 우편번호(1000 미만) / 바코드(비정상 자릿수) 행 삭제
 
 """
 
