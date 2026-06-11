@@ -1,0 +1,243 @@
+/* ── Grid layout ─────────────────────────────────────────────── */
+.bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: auto auto;
+  gap: 12px;
+}
+
+/* Placeholder spans the 5th position (col 1 on row 2) */
+.bg-placeholder {
+  grid-column: span 4;
+}
+
+/* ── Card shell ───────────────────────────────────────────────── */
+.bg-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.bg-card-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bg-card-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 1px;
+}
+
+.bg-card-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.bg-card-body { padding: 10px 14px 12px; flex: 1; }
+
+/* ── Shared table ─────────────────────────────────────────────── */
+.bg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.bg-table th {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+  padding: 0 6px 6px 0;
+}
+
+.bg-table td {
+  padding: 6px 6px 6px 0;
+  color: #374151;
+  border-bottom: 1px solid #f8fafc;
+  vertical-align: middle;
+}
+
+.bg-table tr:last-child td { border-bottom: none; }
+
+/* ── Rank badge ───────────────────────────────────────────────── */
+.rank-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  font-size: 10px;
+  font-weight: 700;
+  background: #f1f5f9;
+  color: #64748b;
+  border-radius: 4px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Mini bar (Category TOP5) ─────────────────────────────────── */
+.mini-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mini-bar-track {
+  flex: 1;
+  height: 6px;
+  background: #f1f5f9;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.mini-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.mini-pct {
+  font-size: 11px;
+  color: #64748b;
+  width: 28px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── Change badge (Region TOP5) ───────────────────────────────── */
+.change-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.change-badge.up { background: #f0fdf4; color: #16a34a; }
+.change-badge.dn { background: #fef2f2; color: #dc2626; }
+
+/* ── num cell ─────────────────────────────────────────────────── */
+td.num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+/* ── Summary grid (Card 3) ────────────────────────────────────── */
+.summary-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.summary-block {
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.summary-label {
+  display: block;
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+
+.summary-val {
+  display: block;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.summary-val.neutral { color: #1e293b; }
+.summary-val.danger  { color: #ef4444; }
+.summary-val.warning { color: #f59e0b; }
+
+/* ── Surge list (Card 4) ──────────────────────────────────────── */
+.surge-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.surge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.surge-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.surge-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.surge-qty {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.surge-badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #16a34a;
+  background: #f0fdf4;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+/* ── Placeholder card ─────────────────────────────────────────── */
+.bg-placeholder {
+  min-height: 80px;
+  border: 2px dashed #e2e8f0;
+  box-shadow: none;
+  background: #fafbfc;
+}
+
+.bg-placeholder-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  height: 100%;
+}
+
+.bg-placeholder-icon { font-size: 22px; }
+
+.bg-placeholder-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.bg-placeholder-sub {
+  font-size: 11.5px;
+  color: #cbd5e1;
+}
