@@ -1,8 +1,5 @@
 data/
 *.xlsx
-<<<<<<< Updated upstream
-*.csv
-=======
 *.csv
 
 __pycache__/
@@ -11,4 +8,3 @@ __pycache__/
 api_keys.env gitignore
 
 node_modules/
->>>>>>> Stashed changes
