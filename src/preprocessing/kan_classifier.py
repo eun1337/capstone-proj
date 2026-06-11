@@ -32,20 +32,19 @@ _DATA = (_HERE / "../../data/master").resolve()          # data/master/
 # ★ 설정 (실행 전 여기만 수정) ★
 # =====================================================================
 
-# 사용할 모델 제공자: "gemini" | "openai" | "anthropic" | "clova"
-MODEL_PROVIDER = "clova"
+# 사용할 모델 제공자: "gemini" | "openai" | "anthropic"
+MODEL_PROVIDER = "openai"
 
 # 각 제공자별 사용 모델명 (필요시 변경)
 MODEL_NAMES = {
     "gemini":    "gemini-2.5-flash",
-    "openai":    "gpt-4o-mini",
+    "openai":    "gpt-4o",
     "anthropic": "claude-sonnet-4-5",
     "clova":     "HCX-007",
 }
 
 # 입력 파일 경로 (complete 또는 missing 파일로 변경)
-INPUT_FILE = str(_DATA / "a_llm_testset_375_missing.xlsx"
-"")
+INPUT_FILE = str(_DATA / "a_llm_testset_375_missing.xlsx")
 KAN_FILE   = str(_DATA / "[대한상공회의소]KAN상품분류코드.xlsx")
 
 # 출력 파일명: None이면 자동 생성

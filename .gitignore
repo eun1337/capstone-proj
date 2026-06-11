@@ -2,7 +2,9 @@ data/
 *.xlsx
 *.csv
 
-__pycache__/
-*.pyc
+__pycache__
 
-api_keys.env gitignore
+api_keys.env
+
+.DS_Store
+  **/.DS_Store
