@@ -1,12 +1,13 @@
-"""
-kan_classifier.py
-
-설명 : KAN 상품분류코드 자동 분류 스크립트.
-    Gemini / OpenAI GPT / Anthropic Claude 3개 모델 지원하며,
-    상품명 기반으로 대한상공회의소 KAN 분류체계(대/중/소분류)를 자동 매핑합니다.
-    배치 처리(기본 30개) + 속도 제한 자동 재시도, 분류 결과 코드 유효성 검증(624개 소분류 코드 대조),
-    서식 포함 .xlsx 파일로 결과 저장합니다.
-"""
+# =====================================================================
+# kan_classifier.py
+# KAN 상품분류코드 자동 분류 스크립트
+# - 지원 모델: Gemini / OpenAI GPT / Anthropic Claude / Clova
+# - MODEL_PROVIDER만 변경하여 모델 전환 가능
+# - API 키는 api_keys.env 파일에서 안전하게 로딩
+# - INPUT_FILE을 변경하여 complete / missing 파일 개별 처리
+# - 결과는 서식 포함 .xlsx 파일로 저장
+# - 어느 디렉토리에서 실행해도 경로 자동 계산 (팀 공유 환경 대응)
+# =====================================================================
 
 import pathlib
 import pandas as pd
@@ -31,29 +32,30 @@ _DATA = (_HERE / "../../data/master").resolve()          # data/master/
 # ★ 설정 (실행 전 여기만 수정) ★
 # =====================================================================
 
-# 사용할 모델 제공자: "gemini" | "openai" | "anthropic"
-MODEL_PROVIDER = "anthropic"
+# 사용할 모델 제공자: "gemini" | "openai" | "anthropic" | "clova"
+MODEL_PROVIDER = "clova"
 
 # 각 제공자별 사용 모델명 (필요시 변경)
 MODEL_NAMES = {
     "gemini":    "gemini-2.5-flash",
     "openai":    "gpt-4o-mini",
     "anthropic": "claude-sonnet-4-5",
+    "clova":     "HCX-007",
 }
 
 # 입력 파일 경로 (complete 또는 missing 파일로 변경)
-INPUT_FILE = str(_DATA / "b_llm_testset_374_missing.xlsx")
+INPUT_FILE = str(_DATA / "a_llm_testset_375_missing.xlsx"
+"")
 KAN_FILE   = str(_DATA / "[대한상공회의소]KAN상품분류코드.xlsx")
 
 # 출력 파일명: None이면 자동 생성
-# 예: a_llm_testset_375_complete_gemini_result.xlsx
 OUTPUT_FILE = None
 
 # API 키 파일 경로 (스크립트와 같은 폴더: src/preprocessing/api_keys.env)
 ENV_FILE = str(_HERE / "api_keys.env")
 
-BATCH_SIZE    = 30
-SLEEP_SECONDS = 4.5   # Gemini 무료 쿼터 기준 (분당 15회) 4.5; GPT/Claude는 더 줄여도 됨
+BATCH_SIZE    = 5
+SLEEP_SECONDS = 15
 START_IDX     = 0     # 이어서 돌릴 때 시작 행 번호 (0 = 처음부터)
 
 
@@ -61,7 +63,7 @@ START_IDX     = 0     # 이어서 돌릴 때 시작 행 번호 (0 = 처음부터
 # API 키 로딩 (.env 파일)
 # =====================================================================
 
-def load_api_key(provider: str, env_file: str) -> str:
+def load_api_key(provider: str, env_file: str):
     """api_keys.env 파일에서 해당 provider의 API 키를 로딩합니다."""
     if not os.path.exists(env_file):
         raise FileNotFoundError(
@@ -69,13 +71,15 @@ def load_api_key(provider: str, env_file: str) -> str:
             f"   src/preprocessing/ 폴더에 api_keys.env 파일을 만들고 아래 형식으로 입력하세요.\n"
             f"   GEMINI_API_KEY=AIza...\n"
             f"   OPENAI_API_KEY=sk-...\n"
-            f"   ANTHROPIC_API_KEY=sk-ant-..."
+            f"   ANTHROPIC_API_KEY=sk-ant-...\n"
+            f"   CLOVA_API_KEY=nv-..."
         )
     load_dotenv(env_file)
     key_map = {
         "gemini":    "GEMINI_API_KEY",
         "openai":    "OPENAI_API_KEY",
         "anthropic": "ANTHROPIC_API_KEY",
+        "clova":     "CLOVA_API_KEY",
     }
     env_var = key_map[provider]
     key = os.getenv(env_var)
@@ -182,12 +186,12 @@ def build_system_prompt(kan_file: str) -> str:
 ]
 
 ## 분류 규칙
-1. [세분류 대조 우선] 상품명과 세분류 목록(→ 뒤의 항목들)을 먼저 대조하여 해당 소분류를 특정하십시오. 세분류에 정확히 일치하는 항목이 있으면 해당 소분류 코드를 사용하십시오.
-2. [코드 엄격 준수] 소분류코드는 반드시 위 분류 체계의 [코드] 목록에 있는 6자리 값 중 하나여야 합니다. 임의로 코드를 생성하거나 변형하지 마십시오.
+1. [세분류 대조 우선] 상품명과 세분류 목록(→ 뒤의 항목들)을 먼저 대조하여 해당 소분류를 특정하십시오.
+2. [코드 엄격 준수] 소분류코드는 반드시 위 분류 체계의 [코드] 목록에 있는 6자리 값 중 하나여야 합니다.
 3. [본질 기반 분류] 브랜드명·용량·규격 등 부가 정보를 배제하고 상품의 본질적 속성·용도 기준으로 분류하십시오.
 4. [핵심 용도 우선] 상품이 여러 분류에 걸칠 경우, 소비자의 주된 구매 목적을 기준으로 분류하십시오.
-5. [기존 분류 참고] 입력에 [참고] 기존 분류가 있으면 상품 성격 파악에 가볍게 참고해도 좋습니다. 단, 분류 판단의 근거는 항상 상품명과 KAN 세분류 목록이어야 합니다.
-6. [최선 매핑 우선] 세분류 목록에 정확히 일치하지 않아도, 본질적 속성이 가장 유사한 소분류로 매핑하십시오. "기타XX" 소분류는 위 규칙을 모두 적용해도 어디에도 맞지 않을 때만 사용하십시오.
+5. [기존 분류 참고] 입력에 [참고] 기존 분류가 있으면 상품 성격 파악에 가볍게 참고해도 좋습니다.
+6. [최선 매핑 우선] 세분류 목록에 정확히 일치하지 않아도, 본질적 속성이 가장 유사한 소분류로 매핑하십시오.
 7. [완전 불가 시] 전체 분류 체계 어디에도 본질적으로 맞지 않으면 소분류코드: "999999", 소분류: "기타"로 표기하십시오.
 8. [바코드 보조 활용] 바코드는 상품 식별 보조 정보로만 참고하고, 최종 판단은 상품명 기준으로 하십시오.
 """
@@ -252,7 +256,12 @@ def build_batch_prompt(batch: list) -> str:
 def parse_response(response_text: str, batch: list) -> list:
     cleaned = re.sub(r"```(?:json)?", "", response_text).strip().rstrip("`")
     try:
-        return json.loads(cleaned)
+        results = json.loads(cleaned)
+        # 번호 키 없는 경우 보정
+        for i, r in enumerate(results):
+            if "번호" not in r:
+                r["번호"] = batch[i]["idx"]
+        return results
     except json.JSONDecodeError:
         return [
             {
@@ -270,8 +279,7 @@ def parse_response(response_text: str, batch: list) -> list:
 # 모델별 API 클라이언트 초기화
 # =====================================================================
 
-def init_client(provider: str, api_key: str, model_name: str, system_prompt: str):
-    """각 제공자별 클라이언트/모델 객체를 반환합니다."""
+def init_client(provider: str, api_key, model_name: str, system_prompt: str):
     if provider == "gemini":
         import google.generativeai as genai
         genai.configure(api_key=api_key)
@@ -292,8 +300,15 @@ def init_client(provider: str, api_key: str, model_name: str, system_prompt: str
         client._kan_system_prompt = system_prompt
         client._kan_model_name    = model_name
 
+    elif provider == "clova":
+        import types
+        client = types.SimpleNamespace()
+        client._kan_system_prompt = system_prompt
+        client._kan_model_name    = model_name
+        client._kan_api_key       = api_key
+
     else:
-        raise ValueError(f"지원하지 않는 MODEL_PROVIDER: '{provider}'  →  gemini | openai | anthropic 중 선택")
+        raise ValueError(f"지원하지 않는 MODEL_PROVIDER: '{provider}'  →  gemini | openai | anthropic | clova 중 선택")
 
     return client
 
@@ -341,10 +356,47 @@ def _call_anthropic(client, prompt: str) -> str:
     return text.strip()
 
 
+def _call_clova(client, prompt: str) -> str:
+    import requests as req
+    url = f"https://clovastudio.stream.ntruss.com/v3/chat-completions/{client._kan_model_name}"
+    headers = {
+        "Authorization": f"Bearer {client._kan_api_key}",
+        "Content-Type":  "application/json",
+        "Accept":        "application/json",
+    }
+    body = {
+        "messages": [
+            {"role": "system", "content": client._kan_system_prompt},
+            {"role": "user",   "content": prompt},
+        ],
+        "maxCompletionTokens": 4096, # CLOVA 아닌경우, "maxTokens":   4096,
+        "temperature": 0.0,
+        "topP":        0.8,
+        "thinking":    {"effort": "none"},  # 추론 모드 끄기 (속도/토큰 절약)
+    }
+    response = req.post(url, headers=headers, json=body, timeout=60)
+
+    if response.status_code != 200:
+        raise ValueError(f"Clova API 오류 [{response.status_code}]: {response.text[:200]}")
+
+    result = response.json()
+
+    # 응답 구조: result.message.content
+    try:
+        text = result["result"]["message"]["content"]
+    except (KeyError, TypeError):
+        raise ValueError(f"Clova 응답 파싱 실패: {str(result)[:200]}")
+
+    if not text:
+        raise ValueError("빈 응답 (Clova)")
+    return text.strip()
+
+
 _CALLERS = {
     "gemini":    _call_gemini,
     "openai":    _call_openai,
     "anthropic": _call_anthropic,
+    "clova":     _call_clova,
 }
 
 
@@ -394,9 +446,6 @@ def resolve_output_path(input_file: str, provider: str) -> str:
 # =====================================================================
 
 def save_xlsx(df: pd.DataFrame, output_path: str, provider: str) -> None:
-    """결과 DataFrame을 서식이 적용된 .xlsx 파일로 저장합니다."""
-
-    # 컬럼 순서 재정렬: 원본 컬럼 + KAN 결과 컬럼
     kan_cols  = ["kan_소분류코드", "kan_대분류", "kan_중분류", "kan_소분류", "코드검증"]
     orig_cols = [c for c in df.columns if c not in kan_cols]
     df = df[orig_cols + kan_cols]
@@ -406,12 +455,11 @@ def save_xlsx(df: pd.DataFrame, output_path: str, provider: str) -> None:
     wb = openpyxl.load_workbook(output_path)
     ws = wb.active
 
-    # -- 색상 팔레트 --------------------------------------------------
-    COLOR_HEADER_ORIG = "4472C4"   # 진파랑  - 원본 컬럼 헤더
-    COLOR_HEADER_KAN  = "ED7D31"   # 주황    - KAN 결과 컬럼 헤더
-    COLOR_OK          = "E2EFDA"   # 연초록  - 정상
-    COLOR_ETC         = "FFF2CC"   # 연노랑  - 기타(999999)
-    COLOR_ERR         = "FCE4D6"   # 연빨강  - 코드오류
+    COLOR_HEADER_ORIG = "4472C4"
+    COLOR_HEADER_KAN  = "ED7D31"
+    COLOR_OK          = "E2EFDA"
+    COLOR_ETC         = "FFF2CC"
+    COLOR_ERR         = "FCE4D6"
 
     fill_header_orig = PatternFill("solid", fgColor=COLOR_HEADER_ORIG)
     fill_header_kan  = PatternFill("solid", fgColor=COLOR_HEADER_KAN)
@@ -427,7 +475,6 @@ def save_xlsx(df: pd.DataFrame, output_path: str, provider: str) -> None:
     center = Alignment(horizontal="center", vertical="center", wrap_text=False)
     left   = Alignment(horizontal="left",   vertical="center", wrap_text=False)
 
-    # -- 헤더 행 서식 ------------------------------------------------
     kan_col_names = set(kan_cols)
     col_index_map = {cell.value: cell.column for cell in ws[1]}
 
@@ -438,7 +485,6 @@ def save_xlsx(df: pd.DataFrame, output_path: str, provider: str) -> None:
         cell.border    = border
     ws.row_dimensions[1].height = 22
 
-    # -- 데이터 행 서식 ----------------------------------------------
     verify_col      = col_index_map.get("코드검증")
     kan_col_indices = {col_index_map[c] for c in kan_cols if c in col_index_map}
 
@@ -457,7 +503,6 @@ def save_xlsx(df: pd.DataFrame, output_path: str, provider: str) -> None:
             header_name = ws.cell(1, cell.column).value
             cell.alignment = left if header_name == "상품명" else center
 
-    # -- 컬럼 너비 자동 조정 -----------------------------------------
     for col_cells in ws.columns:
         col_letter = get_column_letter(col_cells[0].column)
         max_len = max(
@@ -466,10 +511,7 @@ def save_xlsx(df: pd.DataFrame, output_path: str, provider: str) -> None:
         )
         ws.column_dimensions[col_letter].width = min(max_len * 1.3 + 2, 45)
 
-    # -- 틀 고정 (헤더 행) -------------------------------------------
     ws.freeze_panes = "A2"
-
-    # -- 시트 탭 이름 ------------------------------------------------
     ws.title = f"KAN분류_{provider}"
 
     wb.save(output_path)
@@ -480,13 +522,11 @@ def save_xlsx(df: pd.DataFrame, output_path: str, provider: str) -> None:
 # =====================================================================
 
 def main():
-    # -- 파일 존재 확인 ----------------------------------------------
     for f in [INPUT_FILE, KAN_FILE]:
         if not os.path.exists(f):
             print(f"❌ 파일 없음: '{f}'")
             return
 
-    # -- API 키 로딩 -------------------------------------------------
     try:
         api_key = load_api_key(MODEL_PROVIDER, ENV_FILE)
         print(f"🔑 API 키 로딩 완료 ({MODEL_PROVIDER})")
@@ -494,10 +534,8 @@ def main():
         print(e)
         return
 
-    # -- 출력 경로 확정 ----------------------------------------------
     output_path = OUTPUT_FILE if OUTPUT_FILE else resolve_output_path(INPUT_FILE, MODEL_PROVIDER)
 
-    # -- KAN 체계 로딩 -----------------------------------------------
     print("📂 KAN 유효 코드 로딩...")
     valid_codes = load_valid_codes(KAN_FILE)
     print(f"  → 소분류 코드 {len(valid_codes)}개")
@@ -505,18 +543,15 @@ def main():
     print("📂 시스템 프롬프트 빌드...")
     system_prompt = build_system_prompt(KAN_FILE)
 
-    # -- 클라이언트 초기화 -------------------------------------------
     model_name = MODEL_NAMES[MODEL_PROVIDER]
     print(f"🤖 모델 초기화: [{MODEL_PROVIDER}] {model_name}")
     client = init_client(MODEL_PROVIDER, api_key, model_name, system_prompt)
     print(f"  → 준비 완료")
 
-    # -- 데이터 로딩 -------------------------------------------------
     df_full = pd.read_excel(INPUT_FILE, dtype={"바코드": str})
     df      = df_full.iloc[START_IDX:].reset_index(drop=True)
     print(f"📊 처리 대상: {START_IDX} ~ {START_IDX + len(df) - 1}행 ({len(df):,}개)")
 
-    # -- 배치 분류 ---------------------------------------------------
     records = [row_to_record(i, row) for i, row in df.iterrows()]
     batches = [records[i:i + BATCH_SIZE] for i in range(0, len(records), BATCH_SIZE)]
 
@@ -529,7 +564,6 @@ def main():
         if len(batches) > 1:
             time.sleep(SLEEP_SECONDS)
 
-    # -- 결과 병합 ---------------------------------------------------
     df["kan_소분류코드"] = [all_results.get(i + 1, {}).get("소분류코드", "ERROR") for i in range(len(df))]
     df["kan_대분류"]     = [all_results.get(i + 1, {}).get("대분류",    "ERROR") for i in range(len(df))]
     df["kan_중분류"]     = [all_results.get(i + 1, {}).get("중분류",    "ERROR") for i in range(len(df))]
@@ -538,10 +572,8 @@ def main():
         lambda c: "정상" if c in valid_codes else ("기타(999999)" if c == "999999" else "코드오류")
     )
 
-    # -- 엑셀 저장 (서식 포함) ---------------------------------------
     save_xlsx(df, output_path, MODEL_PROVIDER)
 
-    # -- 결과 요약 ---------------------------------------------------
     total = len(df)
     ok    = (df["코드검증"] == "정상").sum()
     etc   = (df["코드검증"] == "기타(999999)").sum()
