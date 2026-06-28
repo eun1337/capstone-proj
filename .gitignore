@@ -1,10 +1,9 @@
-data/
-*.xlsx
-*.csv
-
-__pycache__
-
-api_keys.env
-
-.DS_Store
-  **/.DS_Store
+data/ 
+*.xlsx 
+*.csv 
+__pycache__/ 
+*.pyc 
+api_keys.env 
+node_modules/ 
+.DS_Store 
+**/.DS_Store 
