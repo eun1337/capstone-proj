@@ -57,6 +57,9 @@ BATCH_SIZE    = 5
 SLEEP_SECONDS = 15
 START_IDX     = 0     # 이어서 돌릴 때 시작 행 번호 (0 = 처음부터)
 
+# 일관성 검증용 회차 구분 접미사 (1회차: ""  /  2회차: "_2"  /  3회차: "_3")
+RUN_SUFFIX = ""
+
 
 # =====================================================================
 # API 키 로딩 (.env 파일)
@@ -437,7 +440,7 @@ def classify_batch(provider: str, client, batch: list, retry: int = 0) -> list:
 
 def resolve_output_path(input_file: str, provider: str) -> str:
     base = os.path.splitext(input_file)[0]
-    return f"{base}_{provider}_result.xlsx"
+    return f"{base}_{provider}_result{RUN_SUFFIX}.xlsx"
 
 
 # =====================================================================

@@ -5,30 +5,30 @@ compare_llm_results.py
 설명 : LLM 분류 정답 비교 및 오답 마킹 스크립트
 
 기능
-  - GPT / Gemini / Claude / Clova 답변 셀을 정답 컬럼과 비교
-  - 에러/오류가 포함된 셀은 비교에서 제외(패스) — 회색으로 표시
-  - 오답 셀 배경색을 ★ #FF89BF ★ 로 마킹 (openpyxl PatternFill)
-  - 두 가지 컬럼 형식 자동 감지
-      · 3분류 형식 : GPT_대분류 / GPT_중분류 / GPT_소분류 + 정답_대/중/소분류
-      · 단일 형식  : gpt / 제미나이 / 클로드 / 클로바 + 정답 카테고리 분류
-  - 모델별 정확도 요약 시트(요약) 포함
-  - 결과를 LLM_오답_마킹_리포트.xlsx 로 저장
+    - GPT / Gemini / Claude / Clova 답변 셀을 정답 컬럼과 비교
+    - 에러/오류가 포함된 셀은 비교에서 제외(패스) — 회색으로 표시
+    - 오답 셀 배경색을 ★ #FF89BF ★ 로 마킹 (openpyxl PatternFill)
+    - 두 가지 컬럼 형식 자동 감지
+        · 3분류 형식 : GPT_대분류 / GPT_중분류 / GPT_소분류 + 정답_대/중/소분류
+        · 단일 형식  : gpt / 제미나이 / 클로드 / 클로바 + 정답 카테고리 분류
+    - 모델별 정확도 요약 시트(요약) 포함
+    - 결과를 LLM_오답_마킹_리포트.xlsx 로 저장
 
 위치
-  src/preprocessing/compare_llm_results.py
+src/preprocessing/compare_llm_results.py
 
 사용법
-  # 기본 — 스크립트 기준으로 data/master/ 내 파일 자동 탐색
-  python compare_llm_results.py
+    # 기본 — 스크립트 기준으로 data/master/ 내 파일 자동 탐색
+    python compare_llm_results.py
 
-  # 입력 파일 직접 지정 (.xlsx 또는 .csv 모두 지원)
-  python compare_llm_results.py -i data/master/a_llm_testset_375_final.xlsx
+    # 입력 파일 직접 지정 (.xlsx 또는 .csv 모두 지원)
+    python compare_llm_results.py -i data/master/a_llm_testset_375_final.xlsx
 
-  # 출력 경로 지정
-  python compare_llm_results.py -i testset.csv -o 결과리포트.xlsx
+    # 출력 경로 지정
+    python compare_llm_results.py -i testset.csv -o 결과리포트.xlsx
 
-  # A·B 센터 모두 처리 (기본 동작)
-  python compare_llm_results.py --all
+    # A·B 센터 모두 처리 (기본 동작)
+    python compare_llm_results.py --all
 ═══════════════════════════════════════════════════════════════════════════
 """
 
@@ -84,21 +84,21 @@ ANSWER_SINGLE_CANDIDATES: list[str] = [
 # 형식: (표시명, [대분류 후보], [중분류 후보], [소분류 후보])
 LLM_3LEVEL: list[tuple[str, list[str], list[str], list[str]]] = [
     ("GPT",
-     ["GPT_대분류",    "gpt_대분류",    "GPT대분류"],
-     ["GPT_중분류",    "gpt_중분류",    "GPT중분류"],
-     ["GPT_소분류",    "gpt_소분류",    "GPT소분류"]),
+    ["GPT_대분류",    "gpt_대분류",    "GPT대분류"],
+    ["GPT_중분류",    "gpt_중분류",    "GPT중분류"],
+    ["GPT_소분류",    "gpt_소분류",    "GPT소분류"]),
     ("Gemini",
-     ["Gemini_대분류", "gemini_대분류", "제미나이_대분류"],
-     ["Gemini_중분류", "gemini_중분류", "제미나이_중분류"],
-     ["Gemini_소분류", "gemini_소분류", "제미나이_소분류"]),
+    ["Gemini_대분류", "gemini_대분류", "제미나이_대분류"],
+    ["Gemini_중분류", "gemini_중분류", "제미나이_중분류"],
+    ["Gemini_소분류", "gemini_소분류", "제미나이_소분류"]),
     ("Claude",
-     ["Claude_대분류", "claude_대분류", "클로드_대분류"],
-     ["Claude_중분류", "claude_중분류", "클로드_중분류"],
-     ["Claude_소분류", "claude_소분류", "클로드_소분류"]),
+    ["Claude_대분류", "claude_대분류", "클로드_대분류"],
+    ["Claude_중분류", "claude_중분류", "클로드_중분류"],
+    ["Claude_소분류", "claude_소분류", "클로드_소분류"]),
     ("Clova",
-     ["Clova_대분류",  "clova_대분류",  "클로바_대분류"],
-     ["Clova_중분류",  "clova_중분류",  "클로바_중분류"],
-     ["Clova_소분류",  "clova_소분류",  "클로바_소분류"]),
+    ["Clova_대분류",  "clova_대분류",  "클로바_대분류"],
+    ["Clova_중분류",  "clova_중분류",  "클로바_중분류"],
+    ["Clova_소분류",  "clova_소분류",  "클로바_소분류"]),
 ]
 
 # 형식: (표시명, [단일 컬럼 후보들])
