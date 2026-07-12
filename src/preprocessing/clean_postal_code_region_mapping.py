@@ -10,6 +10,12 @@ postal_code_region_mapping.xlsx의 "전체_우편번호" 탭에서 데이터를 
 - 최종 컬럼: 우편번호,시도,시군구
 - 결과를 같은 폴더에 postal_code_region_mapping_clean.csv 로 저장
 (합계 행은 이미 수동으로 제거된 상태를 전제로 함)
+
+[커버리지 관련 주의사항]
+원본 postal_code_region_mapping.xlsx는 전국 우편번호 전체가 아니라 현재 매장이 존재하는 15개 시도(887건)만 담고 있으며, 인천광역시·
+세종특별자치시 우편번호는 존재하지 않음 (weather의 REGION_TO_STN 매핑 커버리지와 정확히 일치 - 두 외부 데이터 모두 "실제 매장이 있는 지역" 기준으로 만들어짐). 
+다른 물류 데이터(인천/세종 등 현재 커버되지 않는 지역에 매장이 있는 데이터)로 파이프라인을 확장할 경우, 이 매핑 파일과 collect_weather_asos.py의 REGION_TO_STN에 해당 지역 우편번호/관측지점을 추가해야 하며,
+그 전까지는 메인 데이터를 기준(driving table)으로 how="left" 조인해서, 매핑에 없는 지역은 NaN으로 드러나도록 하는 것을 권장한다
 """
 
 from pathlib import Path
@@ -33,6 +39,14 @@ SIDO_STANDARD = {
 df = pd.read_excel(MAPPING_FILE, sheet_name="전체_우편번호")
 print(f"원본 shape: {df.shape}")
 print("원본 컬럼:", df.columns.tolist())
+
+
+# 시도가 비어있는 정크/합계 행 제거 (예: 우편번호만 있고 시도/시군구가 빈 행)
+n_before = len(df)
+df = df[df["시도"].notna()]
+n_after = len(df)
+if n_before != n_after:
+    print(f"\n시도 결측 행 {n_before - n_after}건 제거")
 
 
 df["우편번호"] = df["우편번호"].astype(str).str.zfill(5)

@@ -1,7 +1,8 @@
 """
-clean_asos_by_region.py
+clean_weather_by_region.py
 ------------------------------------------------------------------
-asos_by_region.csv (collect_weather_asos.py로 수집된 원본 ASOS 관측 데이터)
+weather_by_region.csv (overwrite_asos_with_aws.py로 생성된, ASOS 원본 중
+인접 지점 대체 지역을 AWS 실관측값으로 보정한 최종 날씨 데이터)
 정제 스크립트.
 - stn_id를 문자열로 캐스팅 (관측소 코드는 산술 연산 대상이 아니므로 str 고정,
   다른 파일과 dtype 불일치 방지)
@@ -16,18 +17,24 @@ asos_by_region.csv (collect_weather_asos.py로 수집된 원본 ASOS 관측 데�
 - stn_id, stn_name 컬럼 제거 (최종 데이터에서 불필요)
 - avg_ta -> 평균온도, sum_rn -> 총강수량 으로 컬럼명 변경
 - 최종 컬럼: 시도,시군구,년,월,일,평균온도,총강수량
-- 결과를 같은 폴더에 asos_by_region_clean.csv 로 저장
+- 결과를 같은 폴더에 weather_by_region_clean.csv 로 저장
+
+[커버리지 관련 주의사항]
+REGION_TO_STN(collect_weather_asos.py)은 현재 매장이 존재하는 15개 시도만 커버하며, 
+인천광역시·세종특별자치시 관측지점은 매핑되어 있지 않음 
+(regional/postal_code_region_mapping.xlsx의 커버리지와 정확히 일치 - clean_postal_code_region_mapping.py 주석 참고). 
+다른 물류 데이터로 파이프라인을 확장해 인천/세종 지역 매장을 다뤄야 한다면 REGION_TO_STN에 해당 지역 인접 관측지점을 추가하고 재수집해야 함.
 """
 
 from pathlib import Path
 
 import pandas as pd
 
-BASE_DIR    = Path(__file__).resolve().parents[2]           
+BASE_DIR    = Path(__file__).resolve().parents[2]
 DATA_DIR    = BASE_DIR / "data"
 WEATHER_DIR = DATA_DIR / "external" / "weather"
-SRC_FILE    = WEATHER_DIR / "asos_by_region.csv"
-OUT_FILE    = WEATHER_DIR / "asos_by_region_clean.csv"
+SRC_FILE    = WEATHER_DIR / "weather_by_region.csv"
+OUT_FILE    = WEATHER_DIR / "weather_by_region_clean.csv"
 
 
 SIDO_STANDARD = {
@@ -37,7 +44,7 @@ SIDO_STANDARD = {
     "제주": "제주특별자치도",
 }
 
-df = pd.read_csv(SRC_FILE, dtype={"stn_id": str}, parse_dates=["date"])
+df = pd.read_csv(SRC_FILE, dtype={"stn_id": str}, parse_dates=["date"], encoding="cp949")
 print(f"원본 shape: {df.shape}")
 print("원본 컬럼:", df.columns.tolist())
 
