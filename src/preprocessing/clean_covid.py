@@ -6,7 +6,6 @@
 import pandas as pd
 from pathlib import Path
 
-# 경로 설정 (스크립트 위치: src/preprocessing/ -> parents[2] = capstone-proj 루트)
 BASE_DIR = Path(__file__).resolve().parents[2]
 DATA_DIR = BASE_DIR / "data"
 INPUT_PATH = DATA_DIR / "external" / "covid" / "covid_impact_daily.csv"
@@ -16,18 +15,14 @@ OUTPUT_PATH = DATA_DIR / "external" / "covid" / "covid_impact_daily_clean.csv"
 def clean_covid_data(input_path: Path, output_path: Path) -> pd.DataFrame:
     df = pd.read_csv(input_path)
 
-    # date 컬럼을 datetime으로 변환
     df["date"] = pd.to_datetime(df["date"])
 
-    # 연/월/일 컬럼 생성
     df["년"] = df["date"].dt.year
     df["월"] = df["date"].dt.month
     df["일"] = df["date"].dt.day
 
-    # covid_impact 컬럼명을 영향여부로 변경 (값은 원본 그대로)
     df = df.rename(columns={"covid_impact": "영향여부"})
 
-    # 최종 컬럼 정리 (date 원본 컬럼 제거)
     result = df[["년", "월", "일", "영향여부"]]
 
     result.to_csv(output_path, index=False, encoding="utf-8-sig")
