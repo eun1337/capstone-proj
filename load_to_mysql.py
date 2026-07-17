@@ -7,9 +7,9 @@ load_to_mysql.py
     - 적재 후 테이블 row count와 원본 CSV row 수를 비교해 검증합니다.
 
 실행 전 체크리스트:
-  1. .env 파일에 MySQL 접속 정보를 모두 입력했는지 확인
-  2. check_files.py를 먼저 실행해서 데이터 상태 확인
-  3. MySQL DB에 이미 같은 이름의 테이블이 없는지 확인
+    1. .env 파일에 MySQL 접속 정보를 모두 입력했는지 확인
+    2. check_files.py를 먼저 실행해서 데이터 상태 확인
+    3. MySQL DB에 이미 같은 이름의 테이블이 없는지 확인
 """
 
 import os
@@ -17,7 +17,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_DIR = os.path.join(BASE_DIR, "data", "csv")
 
 # 파일명 → 테이블명 매핑
@@ -32,6 +32,9 @@ CSV_FILES = {
 
 
 def get_engine():
+    """
+    .env에서 MySQL 접속 정보를 읽어 SQLAlchemy 엔진을 반환합니다.
+    """
     load_dotenv(os.path.join(BASE_DIR, ".env"))
 
     host = os.getenv("MYSQL_HOST")
@@ -55,6 +58,10 @@ def get_engine():
 
 
 def load_csv_to_table(engine, file_name: str, table_name: str) -> tuple[int, int]:
+    """
+    CSV 파일을 읽어 지정 테이블에 적재합니다.
+    Returns: (csv_row_count, db_row_count)
+    """
     path = os.path.join(CSV_DIR, file_name)
     if not os.path.exists(path):
         raise FileNotFoundError(f"파일을 찾을 수 없습니다: {path}")
