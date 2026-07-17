@@ -38,7 +38,7 @@ CREATE TABLE cleaned_main_joined_v1 AS
 SELECT
     j.센터, j.유형, j.거래일, j.년, j.월, j.일,
     j.우편번호, j.시도, j.시군구,
-    j.바코드, j.상품명, j.KAN_대분류, j.KAN_중분류, j.KAN_소분류,
+    j.바코드, j.상품명, j.옵션코드, j.KAN_CODE, j.KAN_대분류, j.KAN_중분류, j.KAN_소분류,
     j.수량, j.금액,
 
     j.평균온도,

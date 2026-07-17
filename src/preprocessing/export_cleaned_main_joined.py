@@ -47,7 +47,7 @@ def main():
 
     with engine.connect() as conn:
         total_rows = conn.execute(
-            text("SELECT COUNT(*) FROM cleaned_main_joined_v1")
+            text("SELECT COUNT(*) FROM cleaned_main_joined")
         ).scalar()
     print(f"cleaned_main_joined_v1 총 {total_rows:,}행 내보내기 시작 (청크 {CHUNK_SIZE:,}행씩)")
 

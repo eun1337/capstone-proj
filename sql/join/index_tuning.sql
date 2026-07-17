@@ -128,7 +128,7 @@ CREATE TABLE main_joined_all AS
 SELECT
     m.센터, m.유형, m.거래일, m.년, m.월, m.일,
     m.우편번호, m.시도, m.시군구,
-    m.바코드, m.상품명, m.KAN_대분류, m.KAN_중분류, m.KAN_소분류,
+    m.바코드, m.상품명, m.옵션코드, m.KAN_CODE, m.KAN_대분류, m.KAN_중분류, m.KAN_소분류,
     m.수량, m.금액,
 
     w.평균온도,

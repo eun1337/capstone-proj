@@ -38,7 +38,20 @@ SELECT
     MONTH(CAST(일자 AS DATE))                      AS 월,
     DAY(CAST(일자 AS DATE))                        AS 일,
     LPAD(CAST(`공급업체 우편번호` AS CHAR), 5, '0') AS 우편번호,
-    바코드, 상품명, KAN_대분류, KAN_중분류, KAN_소분류,
+    바코드, 상품명, 옵션코드, KAN_CODE,
+    -- KAN_대분류가 'ERROR'로 기록된 행(291건, 6개 원본 테이블 합계) 보정.
+    -- 중분류/소분류는 정상인데 대분류만 깨진 케이스이고, 공식 KAN 분류표
+    -- (data/master/[대한상공회의소]KAN상품분류코드.xlsx)로 대조해 소분류
+    -- 4종류에서만 발생함을 확인 -> 소분류 기준으로 역매핑.
+    -- (대분류='의류'인 행은 정상 - 의류가 실제 11번째 공식 대분류임, 건드리지 않음)
+    CASE
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '구강위생용품'     THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '조리용기'         THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '해조류'           THEN '가공식품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '유아/어린이완구'   THEN '교육/문화용품'
+        ELSE KAN_대분류
+    END AS KAN_대분류,
+    KAN_중분류, KAN_소분류,
     수량                  AS 수량,
     판매금액              AS 금액
 FROM a_purchase
@@ -51,7 +64,20 @@ SELECT
     CAST(일자 AS DATE),
     YEAR(CAST(일자 AS DATE)), MONTH(CAST(일자 AS DATE)), DAY(CAST(일자 AS DATE)),
     LPAD(CAST(`공급업체 우편번호` AS CHAR), 5, '0'),
-    바코드, 상품명, KAN_대분류, KAN_중분류, KAN_소분류,
+    바코드, 상품명, 옵션코드, KAN_CODE,
+    -- KAN_대분류가 'ERROR'로 기록된 행(291건, 6개 원본 테이블 합계) 보정.
+    -- 중분류/소분류는 정상인데 대분류만 깨진 케이스이고, 공식 KAN 분류표
+    -- (data/master/[대한상공회의소]KAN상품분류코드.xlsx)로 대조해 소분류
+    -- 4종류에서만 발생함을 확인 -> 소분류 기준으로 역매핑.
+    -- (대분류='의류'인 행은 정상 - 의류가 실제 11번째 공식 대분류임, 건드리지 않음)
+    CASE
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '구강위생용품'     THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '조리용기'         THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '해조류'           THEN '가공식품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '유아/어린이완구'   THEN '교육/문화용품'
+        ELSE KAN_대분류
+    END AS KAN_대분류,
+    KAN_중분류, KAN_소분류,
     수량,
     판매금액
 FROM b_purchase
@@ -64,7 +90,20 @@ SELECT
     CAST(판매일 AS DATE),
     YEAR(CAST(판매일 AS DATE)), MONTH(CAST(판매일 AS DATE)), DAY(CAST(판매일 AS DATE)),
     LPAD(CAST(`매출처 우편번호` AS CHAR), 5, '0'),
-    바코드, 상품명, KAN_대분류, KAN_중분류, KAN_소분류,
+    바코드, 상품명, 옵션코드, KAN_CODE,
+    -- KAN_대분류가 'ERROR'로 기록된 행(291건, 6개 원본 테이블 합계) 보정.
+    -- 중분류/소분류는 정상인데 대분류만 깨진 케이스이고, 공식 KAN 분류표
+    -- (data/master/[대한상공회의소]KAN상품분류코드.xlsx)로 대조해 소분류
+    -- 4종류에서만 발생함을 확인 -> 소분류 기준으로 역매핑.
+    -- (대분류='의류'인 행은 정상 - 의류가 실제 11번째 공식 대분류임, 건드리지 않음)
+    CASE
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '구강위생용품'     THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '조리용기'         THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '해조류'           THEN '가공식품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '유아/어린이완구'   THEN '교육/문화용품'
+        ELSE KAN_대분류
+    END AS KAN_대분류,
+    KAN_중분류, KAN_소분류,
     판매수량              AS 수량,
     공급가액              AS 금액
 FROM a_sales_2021_2023
@@ -77,7 +116,20 @@ SELECT
     CAST(판매일 AS DATE),
     YEAR(CAST(판매일 AS DATE)), MONTH(CAST(판매일 AS DATE)), DAY(CAST(판매일 AS DATE)),
     LPAD(CAST(`매출처 우편번호` AS CHAR), 5, '0'),
-    바코드, 상품명, KAN_대분류, KAN_중분류, KAN_소분류,
+    바코드, 상품명, 옵션코드, KAN_CODE,
+    -- KAN_대분류가 'ERROR'로 기록된 행(291건, 6개 원본 테이블 합계) 보정.
+    -- 중분류/소분류는 정상인데 대분류만 깨진 케이스이고, 공식 KAN 분류표
+    -- (data/master/[대한상공회의소]KAN상품분류코드.xlsx)로 대조해 소분류
+    -- 4종류에서만 발생함을 확인 -> 소분류 기준으로 역매핑.
+    -- (대분류='의류'인 행은 정상 - 의류가 실제 11번째 공식 대분류임, 건드리지 않음)
+    CASE
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '구강위생용품'     THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '조리용기'         THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '해조류'           THEN '가공식품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '유아/어린이완구'   THEN '교육/문화용품'
+        ELSE KAN_대분류
+    END AS KAN_대분류,
+    KAN_중분류, KAN_소분류,
     판매수량,
     공급가액
 FROM a_sales_2024
@@ -90,7 +142,20 @@ SELECT
     CAST(판매일 AS DATE),
     YEAR(CAST(판매일 AS DATE)), MONTH(CAST(판매일 AS DATE)), DAY(CAST(판매일 AS DATE)),
     LPAD(CAST(`매출처 우편번호` AS CHAR), 5, '0'),
-    바코드, 상품명, KAN_대분류, KAN_중분류, KAN_소분류,
+    바코드, 상품명, 옵션코드, KAN_CODE,
+    -- KAN_대분류가 'ERROR'로 기록된 행(291건, 6개 원본 테이블 합계) 보정.
+    -- 중분류/소분류는 정상인데 대분류만 깨진 케이스이고, 공식 KAN 분류표
+    -- (data/master/[대한상공회의소]KAN상품분류코드.xlsx)로 대조해 소분류
+    -- 4종류에서만 발생함을 확인 -> 소분류 기준으로 역매핑.
+    -- (대분류='의류'인 행은 정상 - 의류가 실제 11번째 공식 대분류임, 건드리지 않음)
+    CASE
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '구강위생용품'     THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '조리용기'         THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '해조류'           THEN '가공식품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '유아/어린이완구'   THEN '교육/문화용품'
+        ELSE KAN_대분류
+    END AS KAN_대분류,
+    KAN_중분류, KAN_소분류,
     판매수량,
     공급가액
 FROM b_sales_2021_2023
@@ -103,7 +168,20 @@ SELECT
     CAST(판매일 AS DATE),
     YEAR(CAST(판매일 AS DATE)), MONTH(CAST(판매일 AS DATE)), DAY(CAST(판매일 AS DATE)),
     LPAD(CAST(`매출처 우편번호` AS CHAR), 5, '0'),
-    바코드, 상품명, KAN_대분류, KAN_중분류, KAN_소분류,
+    바코드, 상품명, 옵션코드, KAN_CODE,
+    -- KAN_대분류가 'ERROR'로 기록된 행(291건, 6개 원본 테이블 합계) 보정.
+    -- 중분류/소분류는 정상인데 대분류만 깨진 케이스이고, 공식 KAN 분류표
+    -- (data/master/[대한상공회의소]KAN상품분류코드.xlsx)로 대조해 소분류
+    -- 4종류에서만 발생함을 확인 -> 소분류 기준으로 역매핑.
+    -- (대분류='의류'인 행은 정상 - 의류가 실제 11번째 공식 대분류임, 건드리지 않음)
+    CASE
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '구강위생용품'     THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '조리용기'         THEN '일상용품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '해조류'           THEN '가공식품'
+        WHEN KAN_대분류 = 'ERROR' AND KAN_소분류 = '유아/어린이완구'   THEN '교육/문화용품'
+        ELSE KAN_대분류
+    END AS KAN_대분류,
+    KAN_중분류, KAN_소분류,
     판매수량,
     공급가액
 FROM b_sales_2024;
