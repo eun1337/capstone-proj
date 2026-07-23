@@ -5,8 +5,12 @@ data/final/aggregated_daily_demand.parquet -> 센터+SKU(바코드+옵션코드+
 레벨로 시도/시군구를 합산한 일별 CSV로 변환.
 
 - 지역(시도/시군구)은 합산하여 group-by에서 제외 (센터+SKU 레벨 분석 목적)
-- 수량/금액/건수 계열은 sum, 공휴일/covid/기온/강수량/cpi 등 날짜 단위 값은 first
-  (같은 날짜는 원래 동일 값이므로 first로 손실 없음)
+- 수량/금액/건수 계열은 sum
+- 공휴일은 max(하루라도 해당 지역에 공휴일이면 1), covid_영향여부는 지역 무관 단일값이라 first
+- 평균온도/총강수량/cpi/경상지수/불변지수는 지역별로 실제 값이 다름을 검증 완료
+  (평균온도 변동폭 평균 7.4℃, 총강수량 최대 1720mm, cpi/경상지수/불변지수도 주별로
+  최대 92~113개 지역값이 서로 다름) → mean으로 집계해야 정보손실이 없음
+- 상품명/규격/입수/KAN_* 등 상품 설명 컬럼만 first(그룹 내 최초값)로 유지
 
 출력: data/csv/daily_center_sku.csv (다음 단계인 02_full_daily_eda_by_center.py의 입력이 됨)
 """
@@ -32,16 +36,27 @@ sum_cols = [
     "총거래건수", "판매건수", "반품건수",
 ]
 
-first_cols = [
+max_cols = ["공휴일"]
+
+first_flag_cols = ["covid_영향여부"]  
+
+mean_cols = ["평균온도", "총강수량", "cpi", "경상지수", "불변지수"]
+
+first_desc_cols = [
     "상품명", "규격", "입수", "KAN_CODE", "KAN_대분류", "KAN_중분류", "KAN_소분류",
-    "공휴일", "covid_영향여부", "평균온도", "총강수량", "cpi", "경상지수", "불변지수",
 ]
 
 sum_cols = [c for c in sum_cols if c in df.columns]
-first_cols = [c for c in first_cols if c in df.columns]
+max_cols = [c for c in max_cols if c in df.columns]
+first_flag_cols = [c for c in first_flag_cols if c in df.columns]
+mean_cols = [c for c in mean_cols if c in df.columns]
+first_desc_cols = [c for c in first_desc_cols if c in df.columns]
 
 agg_dict = {c: "sum" for c in sum_cols}
-agg_dict.update({c: "first" for c in first_cols})
+agg_dict.update({c: "max" for c in max_cols})
+agg_dict.update({c: "first" for c in first_flag_cols})
+agg_dict.update({c: "mean" for c in mean_cols})
+agg_dict.update({c: "first" for c in first_desc_cols})
 
 out = df.groupby(group_cols, as_index=False).agg(agg_dict)
 
