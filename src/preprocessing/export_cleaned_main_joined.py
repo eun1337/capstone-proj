@@ -1,27 +1,19 @@
 """
 export_cleaned_main_joined.py
 ------------------------------------------------------------------
-MySQL의 cleaned_main_joined_v1(피처엔지니어링 직전 최종 정제 테이블,
-매출 기준 356만행)을 로컬 parquet 파일로 내보낸다. 같은 DB에 접속할 수
-없는 협업자와 파일로 데이터를 공유하기 위한 용도.
-
 - 대용량(356만행)이라 pandas.read_sql을 청크 단위로 읽어 메모리 부담을 줄임
-- csv 대신 parquet으로 저장(용량 훨씬 작고 dtype 보존, 이 프로젝트의 기존
-  convert_to_parquet.py와 동일한 포맷 컨벤션)
-- 결과 파일: data/final/cleaned_main_joined_v1.parquet
-  (data/ 전체가 .gitignore 대상이라 git에는 안 올라감 -> 별도로 파일
-  전달해야 함, 예: 구글드라이브/USB 등)
+- csv 대신 parquet으로 저장(용량 훨씬 작고 dtype 보존, 이 프로젝트의 기존 convert_to_parquet.py와 동일한 포맷 컨벤션)
 """
 
 import os
 
 import pandas as pd
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FINAL_DIR = os.path.join(BASE_DIR, "data", "final")
-OUT_FILE = os.path.join(FINAL_DIR, "cleaned_main_joined_v1.parquet")
+OUT_FILE = os.path.join(FINAL_DIR, "cleaned_main_joined.parquet")
 
 CHUNK_SIZE = 200_000
 
@@ -55,7 +47,7 @@ def main():
 
     with engine.connect() as conn:
         total_rows = conn.execute(
-            "SELECT COUNT(*) FROM cleaned_main_joined_v1"
+            text("SELECT COUNT(*) FROM cleaned_main_joined_v1")
         ).scalar()
     print(f"cleaned_main_joined_v1 총 {total_rows:,}행 내보내기 시작 (청크 {CHUNK_SIZE:,}행씩)")
 
@@ -71,6 +63,11 @@ def main():
         print(f"  읽음: {read:,} / {total_rows:,}")
 
     df = pd.concat(chunks, ignore_index=True)
+
+    # 청크마다 pandas가 독립적으로 dtype을 추론해서, concat 후에도 컬럼
+    # 하나에 타입이 섞여 남을 수 있어 명시적으로 고정
+    df["공휴일"] = df["공휴일"].astype(int)
+
     print(f"\n최종 shape: {df.shape}")
 
     df.to_parquet(OUT_FILE, index=False, engine="pyarrow")

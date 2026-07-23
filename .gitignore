@@ -13,3 +13,4 @@ reports/
 *.parquet
 output.txt
 *.session.sql
+analysis-results/
