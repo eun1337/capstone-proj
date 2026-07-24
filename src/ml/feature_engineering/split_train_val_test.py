@@ -13,7 +13,8 @@ split_train_val_test.py
     1) 지역(시도/시군구) 합산 후 센터+SKU 단위로 축소
     2) target_h{h}(원본수량) + target_h{h}_flag(분류)/target_h{h}_qty_log1p(회귀) 3종 세트 생성
     3) qty가 희소 데이터라 shift 전에 sku_id별 주간 캘린더 그리드로 reindex
-       - grid_start = min(purchase 최초입고일, 첫 관측 주) - 데이터 유실 방지
+       - grid_start = min(purchase 최초입고일, 첫 관측 주) - 데이터 유실 방지, data_floor로 clip
+       - stock_week = grid_start와 동일한 값 사용(NaN/0 판정 기준을 grid_start와 통일)
        - 미관측 주: 입고일 이후는 0(진짜 미판매), 입고일 이전은 NaN(재고 없어 수요 유무 모름)
     4) 미래(week_st+h주 > 데이터셋 마지막 관측일)는 NaN, drop하지 않고 유지 (dropna는 학습 시점에)
     5) B센터는 _with_regime 파일 사용, 레짐='post'(2023-07~)만 학습 데이터로 사용
@@ -163,13 +164,7 @@ def reindex_full_calendar(agg_df: pd.DataFrame, first_stock_map: pd.DataFrame,
         sku_ranges["grid_start"].dt.weekday, unit="D"
     )
 
-    if len(fs):
-        sku_ranges["stock_week"] = sku_ranges[PURCHASE_FIRST_STOCK_COL] - pd.to_timedelta(
-            sku_ranges[PURCHASE_FIRST_STOCK_COL].dt.weekday, unit="D"
-        )
-        sku_ranges["stock_week"] = sku_ranges["stock_week"].fillna(sku_ranges["first_observed_week"])
-    else:
-        sku_ranges["stock_week"] = sku_ranges["first_observed_week"]
+    sku_ranges["stock_week"] = sku_ranges["grid_start"]
 
     frames = []
     for _, row in sku_ranges.iterrows():
