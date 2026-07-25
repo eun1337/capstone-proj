@@ -1,25 +1,32 @@
 """
 split_train_val_test.py
- 
+
 설명: A/B센터 주간 수요 데이터를 Train/Val/Test로 분할하고 horizon 타겟(target_h1/4/8)을 생성합니다.
     파일 위치: src/ml/feature_engineering/split_train_val_test.py (BASE_DIR=parents[3])
- 
+
 산출물 (data/ml/splits/):
     A_train.parquet / A_val.parquet / A_test.parquet
     B_train.parquet / B_2024_pool.parquet / B_walkforward_folds.json
     A_returns.parquet / B_returns.parquet (반품수량, 메인 파일과 분리 저장)
- 
+
 핵심 설계:
     1) 지역(시도/시군구) 합산 후 센터+SKU 단위로 축소
     2) target_h{h}(원본수량) + target_h{h}_flag(분류)/target_h{h}_qty_log1p(회귀) 3종 세트 생성
     3) qty가 희소 데이터라 shift 전에 sku_id별 주간 캘린더 그리드로 reindex
-       - grid_start = min(purchase 최초입고일, 첫 관측 주) - 데이터 유실 방지, data_floor로 clip
-       - stock_week = grid_start와 동일한 값 사용(NaN/0 판정 기준을 grid_start와 통일)
-       - 미관측 주: 입고일 이후는 0(진짜 미판매), 입고일 이전은 NaN(재고 없어 수요 유무 모름)
+       - grid_start = min(purchase 최초입고일, 첫 관측 주), data_floor로 clip, 월요일 스냅
+       - stock_week은 grid_start와 동일한 값을 사용 — grid_start 자체가 이미
+         "SKU가 존재한다고 확신할 수 있는 가장 이른 시점"이므로 별도 계산 시 발생하는
+         구조적 결측(최초입고일이 실제 첫거래보다 늦게 기록된 SKU에서 grid_start~stock_week
+         구간이 "입고 전이라 NaN"으로 잘못 처리되는 문제)이 원천적으로 없음
+       - 미관측 주: 입고일(stock_week) 이후는 0(진짜 미판매), 입고일 이전은 NaN(재고 없어 수요 유무 모름)
     4) 미래(week_st+h주 > 데이터셋 마지막 관측일)는 NaN, drop하지 않고 유지 (dropna는 학습 시점에)
-    5) B센터는 _with_regime 파일 사용, 레짐='post'(2023-07~)만 학습 데이터로 사용
+    5) B센터는 _with_regime 파일 사용, 레짐='post'(2023-07~)만 학습 데이터로 사용.
+       레짐 필터로 가려지는 레짐 이전 판매 이력은 existed_before_regime 컬럼으로 별도 보존해
+       레짐 이후 첫 판매만 보고 신상품(콜드스타트)으로 오판되지 않도록 함
     6) B walk-forward: val_weeks=1, step_weeks=1 (rolling-origin)
     7) A/B는 항상 분리 저장, 통합은 학습 시점에 코드 레벨에서 처리
+    8) sku_last_active_week은 SKU 전체가 아니라 그 행 시점까지 누적(ffill)으로 계산해
+       미래 시점의 판매 지속 여부가 과거 행에 섞여 들어가지 않도록 함
 """
 
 
@@ -88,7 +95,11 @@ def load_first_stock_map() -> pd.DataFrame:
         return pd.DataFrame(columns=PURCHASE_KEY_COLS + [PURCHASE_FIRST_STOCK_COL])
     pdf[PURCHASE_FIRST_STOCK_COL] = pd.to_datetime(pdf[PURCHASE_FIRST_STOCK_COL])
     keep = PURCHASE_KEY_COLS + [PURCHASE_FIRST_STOCK_COL]
-    return pdf[keep].drop_duplicates(subset=PURCHASE_KEY_COLS)
+    return (
+        pdf[keep]
+        .groupby(PURCHASE_KEY_COLS, as_index=False)[PURCHASE_FIRST_STOCK_COL]
+        .min()
+    )
 
 
 def load_raw(path: Path) -> pd.DataFrame:
@@ -196,10 +207,9 @@ def add_base_targets(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_sku_last_active_week(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
-    real = df[df["sold_flag"] == 1]
-    last_active = real.groupby(SKU_COL)[WEEK_COL].max().rename("sku_last_active_week")
-    df = df.merge(last_active, on=SKU_COL, how="left")
+    df = df.sort_values([SKU_COL, WEEK_COL]).reset_index(drop=True)
+    sale_week = df[WEEK_COL].where(df["sold_flag"] == 1)
+    df["sku_last_active_week"] = sale_week.groupby(df[SKU_COL]).ffill()
     return df
 
 
@@ -226,9 +236,25 @@ def report_split(name: str, df: pd.DataFrame):
     print(f"  [{name}] {len(df):,}행 | {df[WEEK_COL].min().date()} ~ {df[WEEK_COL].max().date()}")
 
 
+def compute_pre_regime_sold_skus(raw_full: pd.DataFrame) -> set:
+    if RAW_REGIME_COL not in raw_full.columns:
+        return set()
+    pre = raw_full[(raw_full[RAW_REGIME_COL] != "post") & (raw_full[RAW_QTY_COL] > 0)]
+    if len(pre) == 0:
+        return set()
+    sku_keys = (
+        pre[RAW_SKU_PARTS[0]].astype(str) + SKU_SEP +
+        pre[RAW_SKU_PARTS[1]].astype(str) + SKU_SEP +
+        pre[RAW_SKU_PARTS[2]].astype(str)
+    )
+    return set(sku_keys.unique())
+
+
 def build_center_df(path: Path, horizons: list[int], first_stock_map: pd.DataFrame,
                      center_label: str, regime_filter: str | None = None) -> pd.DataFrame:
     raw = load_raw(path)
+
+    pre_regime_skus = compute_pre_regime_sold_skus(raw) if regime_filter is not None else set()
 
     if regime_filter is not None and RAW_REGIME_COL in raw.columns:
         before = len(raw)
@@ -246,6 +272,10 @@ def build_center_df(path: Path, horizons: list[int], first_stock_map: pd.DataFra
     print(f"  reindex(연속 주간 그리드): {len(agg):,}행(관측) -> {len(reindexed):,}행(전체 그리드)")
 
     reindexed = reindexed.merge(calendar, on=WEEK_COL, how="left")
+    reindexed["existed_before_regime"] = reindexed[SKU_COL].isin(pre_regime_skus)
+    if pre_regime_skus:
+        n_veteran = reindexed.loc[reindexed["existed_before_regime"], SKU_COL].nunique()
+        print(f"  레짐 이전부터 판매 이력 있는 SKU: {n_veteran:,}개 (existed_before_regime=True)")
 
     df = add_base_targets(reindexed)
     df = add_sku_last_active_week(df)
