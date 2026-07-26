@@ -1,0 +1,312 @@
+"""
+feature_external_interaction_concat.py
+Day3 - 외부변수 Feature + 상호작용(Interaction) Feature 생성 + A/B 통합 Final Feature Table
+
+Day2 산출물(data/ml/splits/*_feat.parquet, 5개: A_train/A_val/A_test/B_train/B_pool)을
+읽어 하나로 합친 뒤, 아래를 추가하고 단일 parquet(feature_table_final.parquet)으로 저장한다.
+
+핵심 설계:
+    1) 공휴일_D0/D-1/D+1: 공휴일은 SKU와 무관한 (center_id, week_st) 단위 캘린더 속성이므로,
+       distinct 캘린더 프레임에서 인접 주(전주/다음주) 값을 구한 뒤 merge한다.
+       (SKU별 grid_start가 서로 달라 SKU 그룹 단위로 shift하면 시작 경계에서 인접 주가
+       실제로는 존재하는데도 다른 SKU 기준으로 밀려 누락될 위험이 있음)
+    2) 강수량_상위5%_flag/count: 주 단위로 미리 집계된 총강수량에서 분위수를 구하면 주간
+       평탄화로 특정 하루의 극단 이벤트가 상쇄되어 묻히므로, 반드시 일별(raw) 원본 기후
+       데이터에서 먼저 하루 단위로 극단 여부를 판정한 뒤 주 단위로 집계(count/flag)한다.
+       일별 원본은 별도 외부 기후 CSV를 다시 지역 매칭하지 않고, data/final/
+       aggregated_daily_demand.parquet(거래일 단위 raw, 센터/시도/시군구별 평균온도·총강수량이
+       이미 정확히 join되어 있는 소스)을 그대로 사용한다.
+       (총강수량이 누적값이 아니라 그날 하루치인지 확인함 — 같은 지역 시계열에서 값이
+       0으로 자주 리셋되고 전날보다 줄어드는 경우도 다수 확인돼 일일 합계로 판단)
+       - (센터, 거래일, 시도, 시군구) 기준으로 drop_duplicates 후 센터·날짜별로 지역 평균을 내어
+         센터 단위 일별 시계열 하나를 만든다.
+       - 임계값은 분위수(percentile) 대신 절대 기준(기상청 특보 기준과 유사한 고정값) 80mm
+         이상을 호우로 판정(상수 HEAVY_RAIN_THRESHOLD). A/B 공통 고정값.
+       - 해당 주(week_st, 월~일)에 며칠 발생했는지 count하고 count>0이면 flag=1.
+       - 원본 거래일 커버리지가 2024-12-31까지라 마지막 주(week_st=2024-12-30)는 2일치
+         (12/30, 12/31)만 반영됨 — 알려진 데이터 한계, 별도 처리 없이 있는 날짜만으로 집계.
+       - aggregated_daily_demand.parquet은 거래(판매) 발생 일자만 기록되어 있어, 그 센터
+         관할 전 지역에서 하루 종일 판매가 0건이면 그 날짜 자체가 통째로 빠짐(진짜 캘린더
+         365일 전체가 아님) — 극단 기후가 있었어도 그날 아무 지역도 판매가 없었다면
+         count에서 누락될 수 있는 알려진 한계.
+       - 기온_극단_flag/count(폭염 33도/한파 -12도)는 시도했으나 폐기함: 원본에 일 최고/최저
+         기온이 없고 일 평균기온만 존재해, 특보 기준 절대값을 평균기온에 그대로 적용하면
+         전체 데이터에서 양성 발생이 0~2건뿐인 영분산(zero-variance) dead feature가 됨을
+         확인. 대신 평균온도/총강수량을 그대로 연속형 feature로 남겨(트리 모델이 스스로
+         비선형 임계점을 학습하도록) temp_x_precip(=평균온도*총강수량) 상호작용만 추가.
+    3) B센터_명절휴무: 원본 데이터에 명절(설날/추석) 식별 컬럼이 없어, B 관측기간
+       (2023-07~2024-12) 내 공식 대한민국 공휴일 캘린더 기준으로 설날/추석 연휴+대체공휴일이
+       포함된 주(week_st)를 수동 지정. A센터는 항상 0.
+    4) center_is_B / temp_x_precip: 통합 모델 1개가 센터별 차이를 반영하도록 하는 상호작용
+       feature. `qty_lag1 * center_is_B` 형태의 명시적 곱셈 상호작용은 의도적으로 생성하지
+       않음 — qty_lag1은 Base Model 핵심 공통 feature라 트리 모델(LightGBM)이 center 계열
+       feature와 조합해 스스로 상호작용을 학습할 수 있고, 인위적 곱 feature가 B센터(26주
+       학습 데이터로 상대적으로 적음)의 과적합 위험을 키울 수 있다고 판단했기 때문(Day4 ML
+       성능 검증에서 B 오차가 크게 나오면 그때 추가 실험 과제로 재검토). 기온_극단_flag가
+       폐기되면서 여기 의존하던 inter_center_temp_extreme도 함께 제거함 — 대신 평균온도*
+       총강수량의 연속형 상호작용(temp_x_precip)을 추가.
+    5) weeks_since_last_active_filled: Day2에서 만든 원본(datetime 파생, 미판매 행은 NaN)을
+       SVM/신경망 등 NaN 미지원 모델용으로, 임의의 큰 값(999 등) 대신 관측 가능한
+       최대 주수(156, 상수 MAX_WEEKS_SINCE_ACTIVE)로 capping하여 채움.
+    6) get_excluded_cols()는 Day2(feature_lag_rolling_calendar.py)의 정의를 그대로 재사용.
+       target_*, ID 컬럼, 진단용 _fill_source, sku_last_active_week(datetime 원본)을 제외.
+       center_id는 ID_COLS에 포함되어 있으므로 원본 문자열은 여전히 제외되고,
+       대신 숫자형 파생인 center_is_B가 feature로 흘러들어가는 구조를 그대로 유지한다.
+"""
+
+from pathlib import Path
+import sys
+
+import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from feature_lag_rolling_calendar import get_excluded_cols
+
+BASE_DIR = Path(__file__).resolve().parents[3]
+SPLIT_DIR = BASE_DIR / "data" / "ml" / "splits"
+OUT_PATH = SPLIT_DIR / "feature_table_final.parquet"
+
+FINAL_DIR = BASE_DIR / "data" / "final"
+DAILY_DEMAND_PATH = FINAL_DIR / "aggregated_daily_demand.parquet"
+DAILY_DATE_COL = "거래일"
+
+WEEK_COL = "week_st"
+CENTER_COL = "center_id"
+
+FEAT_FILES = {
+    ("A", "train"): SPLIT_DIR / "A_train_feat.parquet",
+    ("A", "val"): SPLIT_DIR / "A_val_feat.parquet",
+    ("A", "test"): SPLIT_DIR / "A_test_feat.parquet",
+    ("B", "train"): SPLIT_DIR / "B_train_feat.parquet",
+    ("B", "pool"): SPLIT_DIR / "B_pool_feat.parquet",
+}
+
+MAX_WEEKS_SINCE_ACTIVE = 156
+
+# 기상청 특보 기준과 유사한 절대 임계값 (percentile 아님, A/B 공통 고정값)
+# 기온(폭염 33/한파 -12)은 일 평균기온 기준으로는 영분산 dead feature가 되어 폐기 — 아래 참고
+HEAVY_RAIN_THRESHOLD = 80.0      # 이상이면 호우
+
+# B센터 관측기간(2023-07~2024-12) 내 설날/추석 연휴 + 대체공휴일이 포함된 주(week_st, 월요일).
+# 원본 데이터에 명절 식별 컬럼이 없어 공식 공휴일 캘린더 기준으로 수동 지정.
+B_HOLIDAY_WEEKS = pd.to_datetime([
+    "2023-09-25",  # 추석 연휴(9/28~30) 포함 주
+    "2023-10-02",  # 추석 대체공휴일(10/2) 포함 주
+    "2024-02-05",  # 설날 연휴(2/9~11) 포함 주
+    "2024-02-12",  # 설날 대체공휴일(2/12) 포함 주
+    "2024-09-16",  # 추석 연휴(9/16~18) 포함 주
+])
+
+
+def load_all_feat() -> pd.DataFrame:
+    frames = []
+    for (center, split), path in FEAT_FILES.items():
+        if not path.exists():
+            raise FileNotFoundError(
+                f"{path} 없음 — Day2(feature_lag_rolling_calendar.py)를 먼저 실행해야 함"
+            )
+        df = pd.read_parquet(path)
+        df["split"] = split
+        frames.append(df)
+    return pd.concat(frames, ignore_index=True)
+
+
+def add_holiday_window_features(df: pd.DataFrame) -> pd.DataFrame:
+    cal = (
+        df[[CENTER_COL, WEEK_COL, "공휴일"]]
+        .drop_duplicates()
+        .sort_values([CENTER_COL, WEEK_COL])
+        .reset_index(drop=True)
+    )
+    cal["공휴일_D-1"] = cal.groupby(CENTER_COL)["공휴일"].shift(1).fillna(0).astype(int)
+    cal["공휴일_D+1"] = cal.groupby(CENTER_COL)["공휴일"].shift(-1).fillna(0).astype(int)
+    cal = cal.rename(columns={"공휴일": "공휴일_D0"})
+    df = df.merge(cal, on=[CENTER_COL, WEEK_COL], how="left")
+    return df
+
+
+DAILY_CENTER_COL = "센터"  # aggregated_daily_demand.parquet 원본 컬럼명 (Day1 이후로는 center_id로 통일됨)
+
+
+def _load_daily_center_climate() -> pd.DataFrame:
+    """aggregated_daily_demand.parquet(거래일 grain, 센터/시도/시군구별 평균온도·총강수량이
+    이미 정확히 join되어 있는 raw 소스)에서 (센터, 거래일, 시도, 시군구) distinct 조합만 뽑고,
+    센터·날짜별로 지역 평균을 내 센터 단위 일별 기후 시계열을 만든다."""
+    raw = pd.read_parquet(
+        DAILY_DEMAND_PATH, columns=[DAILY_DATE_COL, DAILY_CENTER_COL, "시도", "시군구", "평균온도", "총강수량"]
+    )
+    region_daily = raw.drop_duplicates(subset=[DAILY_CENTER_COL, DAILY_DATE_COL, "시도", "시군구"])
+    daily = (
+        region_daily.groupby([DAILY_CENTER_COL, DAILY_DATE_COL], as_index=False)[["평균온도", "총강수량"]]
+        .mean()
+        .rename(columns={DAILY_DATE_COL: "date", DAILY_CENTER_COL: CENTER_COL})
+    )
+    return daily
+
+
+def add_climate_extreme_flags(df: pd.DataFrame) -> pd.DataFrame:
+    """일별 원본 기후로 하루 단위 호우 여부를 먼저 판정한 뒤 주(week_st) 단위로
+    발생 일수(count)/발생 여부(flag)를 집계해 붙인다. 임계값이 A/B 공통 고정값이라
+    (percentile이 아니므로) 판정 자체는 센터 구분 없이 한 번에 처리하고,
+    주 단위 집계만 센터별로 나눈다.
+    기온 극단(폭염/한파) flag/count는 폐기함 — 일 평균기온 기준 절대 임계값(33/-12)을
+    적용하면 전체 데이터에서 양성 발생이 0~2건뿐인 영분산 feature가 되기 때문
+    (모듈 docstring 2번 항목 참고)."""
+    daily = _load_daily_center_climate()
+
+    daily["_rain_extreme_day"] = daily["총강수량"] >= HEAVY_RAIN_THRESHOLD
+
+    daily[WEEK_COL] = daily["date"] - pd.to_timedelta(daily["date"].dt.weekday, unit="D")
+    weekly = daily.groupby([CENTER_COL, WEEK_COL], as_index=False).agg(
+        **{"강수량_상위5%_count": ("_rain_extreme_day", "sum")},
+    )
+    weekly["강수량_상위5%_flag"] = (weekly["강수량_상위5%_count"] > 0).astype(int)
+
+    df = df.merge(weekly, on=[CENTER_COL, WEEK_COL], how="left")
+    return df
+
+
+def add_covid_flag(df: pd.DataFrame) -> pd.DataFrame:
+    df["covid_flag"] = df["covid_영향여부"].astype(int)
+    return df
+
+
+def add_b_holiday_flag(df: pd.DataFrame) -> pd.DataFrame:
+    df["B센터_명절휴무"] = 0
+    is_b = df[CENTER_COL] == "B"
+    is_holiday_week = df[WEEK_COL].isin(B_HOLIDAY_WEEKS)
+    df.loc[is_b & is_holiday_week, "B센터_명절휴무"] = 1
+    return df
+
+
+def add_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
+    """qty_lag1 * center_is_B 형태의 명시적 곱셈 상호작용은 의도적으로 생성하지 않음
+    (모듈 docstring 4번 항목 참고 — 트리 모델 자체 학습에 맡기고, B 과적합 위험 회피).
+    temp_x_precip: 평균온도*총강수량 연속형 상호작용 — 기온_극단_flag(영분산이라 폐기)를
+    대체해 트리 모델이 스스로 비선형 임계점을 학습할 수 있도록 연속형 그대로 곱해서 제공."""
+    df["center_is_B"] = (df[CENTER_COL] == "B").astype(int)
+    df["temp_x_precip"] = df["평균온도"] * df["총강수량"]
+    return df
+
+
+def add_weeks_since_active_filled(df: pd.DataFrame) -> pd.DataFrame:
+    df["weeks_since_last_active_filled"] = (
+        df["weeks_since_last_active"].fillna(MAX_WEEKS_SINCE_ACTIVE).clip(upper=MAX_WEEKS_SINCE_ACTIVE)
+    )
+    return df
+
+
+# 2단계 모델링(1단계 A+B 통합 Base Model + 2단계 A센터 잔차 보정) 확정에 따라,
+# B_LAG_WEEKS=[1] 설계상 B센터에는 애초에 존재하지 않는(concat 시 B 전체가 NaN인)
+# qty_lag2/4 계열은 Base Model 학습 feature에서 제외한다. _fill_source는 get_excluded_cols()가
+# 이미 접미사로 걸러내므로 여기서는 원본/log1p/filled 3개씩만 추가하면 됨.
+BASE_MODEL_EXCLUDED_EXTRA = [
+    "qty_lag2", "qty_lag2_log1p", "qty_lag2_filled",
+    "qty_lag4", "qty_lag4_log1p", "qty_lag4_filled",
+]
+
+
+def get_base_model_excluded_cols(df: pd.DataFrame) -> list[str]:
+    """1단계 Base Model(A+B 통합 단일 모델) 학습용 제외 컬럼 = get_excluded_cols() + qty_lag2/4 계열.
+    A센터 전용 2단계 잔차 보정 모델은 A에 qty_lag2/4가 정상 존재하므로 get_excluded_cols()를
+    그대로 쓰고 이 함수는 쓰지 않는다."""
+    return get_excluded_cols(df) + [c for c in BASE_MODEL_EXCLUDED_EXTRA if c in df.columns]
+
+
+def run_sanity_checks(df: pd.DataFrame) -> None:
+    print("=" * 80)
+    print("[Sanity Check 1] 통합 Shape / 센터별 행 수")
+    print(f"  전체 shape: {df.shape}")
+    print(df[CENTER_COL].value_counts().to_string())
+    print(df.groupby([CENTER_COL, "split"]).size().to_string())
+
+    print()
+    print("=" * 80)
+    print("[Sanity Check 2] 상호작용 / 외부변수 Feature 샘플 5행")
+    sample_cols = [
+        CENTER_COL, WEEK_COL, "center_is_B", "평균온도", "총강수량", "temp_x_precip",
+        "강수량_상위5%_flag", "강수량_상위5%_count",
+        "공휴일_D-1", "공휴일_D0", "공휴일_D+1", "B센터_명절휴무",
+    ]
+    print(df[sample_cols].sample(5, random_state=42).to_string(index=False))
+    print("  (참고: qty_lag1 * center_is_B 상호작용 및 기온_극단_flag/count(영분산으로 폐기)는 미생성)")
+
+    print()
+    print("=" * 80)
+    print("[Sanity Check 3] weeks_since_last_active / _filled 통계량")
+    print(df[["weeks_since_last_active", "weeks_since_last_active_filled"]].describe().to_string())
+    n_nan_raw = df["weeks_since_last_active"].isna().sum()
+    n_nan_filled = df["weeks_since_last_active_filled"].isna().sum()
+    print(f"  원본 NaN(한번도 안팔림): {n_nan_raw:,}건 / filled 잔여 NaN: {n_nan_filled:,}건 "
+          f"({'정상' if n_nan_filled == 0 else '⚠ 확인 필요'})")
+
+    print()
+    print("=" * 80)
+    print("[Sanity Check 4] _filled 컬럼 잔여 결측 (Day2에서 넘어온 4개 + 신규 1개, 센터별 분해)")
+    filled_cols = [c for c in df.columns if c.endswith("_filled")]
+    for c in filled_cols:
+        n_na = df[c].isna().sum()
+        by_center = df.loc[df[c].isna(), CENTER_COL].value_counts().to_dict()
+        b_total = len(df[df[CENTER_COL] == "B"])
+        if by_center.get("B", 0) == b_total and b_total > 0 and by_center.get("A", 0) < b_total:
+            note = f"B 전체({b_total:,}행)가 원천적으로 이 컬럼을 생성하지 않음(B_LAG_WEEKS 설계상 없음) — 정상. A쪽 잔여 {by_center.get('A', 0):,}건은 과거 참고 데이터 없는 시작 시점"
+        elif n_na > 0:
+            note = "정상(과거 참고 데이터 없는 시작 시점)"
+        else:
+            note = "결측 없음"
+        print(f"  {c:35s} 잔여 결측 {n_na:,}건 (센터별: {by_center}) — {note}")
+
+    print()
+    print("=" * 80)
+    print("[Sanity Check 5] target_* / get_excluded_cols() 정합성")
+    excluded = get_excluded_cols(df)
+    target_cols = [c for c in df.columns if c.startswith("target_")]
+    missing_targets = [c for c in target_cols if c not in excluded]
+    feature_cols = [c for c in df.columns if c not in excluded and c != "split"]
+    print(f"  target_* 컬럼({len(target_cols)}개): {target_cols}")
+    print(f"  get_excluded_cols() 제외 목록({len(excluded)}개): {excluded}")
+    print(f"  제외 목록에서 빠진 target 컬럼: {missing_targets if missing_targets else '없음 (전부 포함됨)'}")
+    print(f"  최종 feature_cols 후보 개수(참고용, split 제외): {len(feature_cols)}개")
+    leaked_in_features = [c for c in feature_cols if c.startswith("target_")]
+    print(f"  feature_cols에 target_ 섞여 들어간 것: {leaked_in_features if leaked_in_features else '없음'}")
+
+    print()
+    print("=" * 80)
+    print("[Sanity Check 6] 1단계 Base Model(A+B 통합) vs 2단계 A잔차보정 모델 feature set 분리")
+    base_excluded = get_base_model_excluded_cols(df)
+    base_feature_cols = [c for c in df.columns if c not in base_excluded and c != "split"]
+    dropped_for_base = [c for c in feature_cols if c not in base_feature_cols]
+    print(f"  Base Model feature_cols 개수: {len(base_feature_cols)}개 "
+          f"(잔차보정 모델 대비 -{len(dropped_for_base)}개)")
+    print(f"  Base Model에서만 추가로 제외된 컬럼: {dropped_for_base}")
+    still_in_residual = [c for c in dropped_for_base if c in feature_cols]
+    print(f"  A잔차보정 모델(get_excluded_cols 그대로 사용)에는 여전히 존재: {still_in_residual}")
+    leaked_lag24_in_base = [c for c in base_feature_cols if c.startswith(("qty_lag2", "qty_lag4"))]
+    print(f"  Base Model feature_cols에 qty_lag2/4 계열 잔존 여부: "
+          f"{leaked_lag24_in_base if leaked_lag24_in_base else '없음 (정상 제외됨)'}")
+
+
+def main():
+    df = load_all_feat()
+    print(f"[Day3] 5개 Day2 산출물 통합: {len(df):,}행 (A+B, train/val/test/pool)")
+
+    df = add_holiday_window_features(df)
+    df = add_climate_extreme_flags(df)
+    df = add_covid_flag(df)
+    df = add_b_holiday_flag(df)
+    df = add_interaction_features(df)
+    df = add_weeks_since_active_filled(df)
+
+    df[CENTER_COL] = df[CENTER_COL].astype("category")
+
+    run_sanity_checks(df)
+
+    SPLIT_DIR.mkdir(parents=True, exist_ok=True)
+    df.to_parquet(OUT_PATH, index=False)
+    print()
+    print("=" * 80)
+    print(f"[Day3] 최종 저장 완료 -> {OUT_PATH} ({len(df):,}행, {len(df.columns)}개 컬럼)")
+
+
+if __name__ == "__main__":
+    main()

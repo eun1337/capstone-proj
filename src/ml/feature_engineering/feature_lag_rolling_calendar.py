@@ -35,11 +35,14 @@ lag, rolling, 캘린더 feature를 한 번에 계산한 뒤, 원래 분할 기�
        행 제거로 마지막 처리 필요
     8) fallback_summary(): 컬럼별 원본 NaN 개수를 분모로 fallback 단계별 적용 비율을 집계.
        process_center() 실행 시 자동 출력되며, 단계별로 못 채운 행은 "미채움"으로 표시됨
-    9) get_excluded_cols(): target_* 컬럼 + ID 컬럼(center_id/sku_id/week_st) +
-       진단용 `_fill_source` 컬럼 + 변환 필요 컬럼(sku_last_active_week, datetime 타입이라
-       파생값 변환 전에는 모델 입력 불가)을 합쳐 반환. Day11+ 학습 코드에서 import해서
-       feature_cols 구성에 사용. LightGBM/SVM 트랙별 원본 vs `_filled` 선택은 이 함수에
-       포함되지 않으며 트랙별로 별도 처리 필요
+    9) weeks_since_last_active: sku_last_active_week(datetime, point-in-time ffill)을
+       (week_st - sku_last_active_week)주 로 숫자 변환한 feature. 한 번도 안 팔린 행은
+       NaN 유지(coldstart_flag/is_warmup이 이미 그 상태를 표시하므로 억지로 채우지 않음)
+   10) get_excluded_cols(): target_* 컬럼 + ID 컬럼(center_id/sku_id/week_st) +
+       진단용 `_fill_source` 컬럼 + 변환 필요 컬럼(sku_last_active_week 원본, datetime 타입이라
+       모델 입력 불가 - 숫자로 변환된 weeks_since_last_active는 제외 대상 아님)을 합쳐 반환.
+       Day11+ 학습 코드에서 import해서 feature_cols 구성에 사용. LightGBM/SVM 트랙별
+       원본 vs `_filled` 선택은 이 함수에 포함되지 않으며 트랙별로 별도 처리 필요
 """
 
 from pathlib import Path
@@ -113,6 +116,15 @@ def add_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
     df["주차"] = iso["week"].astype(int)
     df["월"] = df[WEEK_COL].dt.month
     df["분기"] = df[WEEK_COL].dt.quarter
+    return df
+
+
+def add_weeks_since_active(df: pd.DataFrame) -> pd.DataFrame:
+    """sku_last_active_week(point-in-time ffill, datetime)을 숫자형 feature로 변환.
+    아직 한 번도 안 팔린 행(sku_last_active_week가 NaT)은 NaN 유지
+    -> coldstart_flag/is_warmup이 이미 이 상태를 표시하므로 억지로 0/큰값을 채우지 않음."""
+    weeks = (df[WEEK_COL] - df["sku_last_active_week"]).dt.days // 7
+    df["weeks_since_last_active"] = weeks
     return df
 
 
@@ -234,6 +246,7 @@ def process_center(
     df = add_lag_features(df, lag_weeks)
     df = add_rolling_features(df)
     df = add_calendar_features(df)
+    df = add_weeks_since_active(df)
 
     lookback = max(lag_weeks + [ROLL_WINDOW])
     df = add_warmup_coldstart_flags(
