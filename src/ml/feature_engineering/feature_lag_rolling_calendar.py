@@ -151,6 +151,67 @@ def add_warmup_coldstart_flags(
     return df
 
 
+def add_sbc_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Syntetos-Boylan Classification의 두 축(ADI, CV²)을 연속형 feature로 추가한다.
+    범주형 sbc_type은 만들지 않음 — SBC 원 논문의 고정 임계값(ADI 1.32/CV² 0.49)은
+    Croston류 고전 추정법을 고를 때 쓰는 값이지 이 LightGBM 모델의 손실을 최적화하는
+    값이 아니라, 트리가 연속값에서 스스로 분기점을 찾게 두는 편이 낫다고 판단함.
+
+    핵심 설계:
+        1) expanding(누적) 방식 — 현재 행 자신은 제외하고 그 이전 관측치만으로 계산
+           (qty_lag류와 동일 원칙: 이번 주 자기 실적이 이번 주 자신의 feature에 섞이면 안 됨).
+           그래서 train 구간도 별도 취급 없이 val/test/pool과 동일한 한 번의 계산으로
+           끝난다(centre별 static 스냅샷을 만들어 join하는 방식이 아님).
+        2) 누적 기준 시점은 coldstart_flag와 동일하게 "첫 판매일 이후"로 통일 — 재고
+           보유 기간이 아니라 수요 관측량이 콜드스타트의 본질이라는 이 모듈의 설계
+           원칙을 그대로 따름. 첫 판매 전 행은 ADI/CV² 자체가 정의되지 않아 NaN(coldstart_flag가
+           이미 이 상태를 표시하므로 억지로 채우지 않고, 이후 add_category_fallback()에서
+           qty_lag/qty_rollmean_4와 동일하게 처리).
+        3) ADI = (첫 판매 후 경과 주 수, 현재 행 이전까지) / (그 기간 내 판매 발생 주 수,
+           현재 행 이전까지). CV² = 판매(양수) 행만의 부분series에서 구한 expanding
+           분산/평균² — 판매가 없는 주는 마지막 판매 시점까지의 값을 그대로 이어받는다
+           (ffill). 둘 다 판매 이력이 부족하면(판매 0~1건) 정의 불가라 NaN.
+        4) B센터의 existed_before_regime=True(레짐 이전부터 팔리던 베테랑 SKU)는
+           coldstart_flag처럼 단순 boolean 보정이 불가능하다 — 레짐 이전 실제 판매
+           이력 자체가 결측이라, 이 SKU들의 레짐 이후 초반 ADI/CV²는 실제보다 짧은
+           이력에 근거할 수밖에 없다(알려진 한계, 별도 보정 없이 그대로 둠).
+    """
+    df = df.sort_values([SKU_COL, WEEK_COL]).reset_index(drop=True)
+
+    sold_mask = df["sold_flag"] == 1
+    first_sale_week = (
+        df.loc[sold_mask].groupby(SKU_COL)[WEEK_COL].min().rename("_first_sale_week")
+    )
+    df = df.merge(first_sale_week, on=SKU_COL, how="left")
+
+    weeks_since_first_sale = (df[WEEK_COL] - df["_first_sale_week"]).dt.days // 7
+    never_sold_yet = df["_first_sale_week"].isna() | (weeks_since_first_sale < 0)
+
+    df["_sold_int"] = sold_mask.astype(int)
+    pos_cumsum_prior = df.groupby(SKU_COL, sort=False)["_sold_int"].transform(
+        lambda s: s.shift(1).cumsum()
+    )
+    df["adi_expanding"] = weeks_since_first_sale / pos_cumsum_prior.replace(0, np.nan)
+    df.loc[never_sold_yet, "adi_expanding"] = np.nan
+
+    pos_rows = df.loc[sold_mask, [SKU_COL, WEEK_COL, QTY_COL]].sort_values([SKU_COL, WEEK_COL])
+    grp_pos_qty = pos_rows.groupby(SKU_COL, sort=False)[QTY_COL]
+    shifted_pos = grp_pos_qty.transform(lambda s: s.shift(1))
+    n_prior = grp_pos_qty.transform(lambda s: s.shift(1).expanding().count())
+    mean_prior = shifted_pos.groupby(pos_rows[SKU_COL]).transform(lambda s: s.expanding().mean())
+    std_prior = shifted_pos.groupby(pos_rows[SKU_COL]).transform(lambda s: s.expanding().std())
+    pos_rows["_cv2_at_sale"] = np.where(
+        (n_prior >= 2) & (mean_prior > 0), (std_prior / mean_prior) ** 2, np.nan
+    )
+
+    cv2_by_week = pos_rows[[SKU_COL, WEEK_COL, "_cv2_at_sale"]]
+    df = df.merge(cv2_by_week, on=[SKU_COL, WEEK_COL], how="left")
+    df["cv2_expanding"] = df.groupby(SKU_COL, sort=False)["_cv2_at_sale"].ffill()
+
+    df = df.drop(columns=["_first_sale_week", "_sold_int", "_cv2_at_sale"])
+    return df
+
+
 def add_category_fallback(
     df: pd.DataFrame, feature_cols: list[str], max_widen_weeks: int = 8
 ) -> pd.DataFrame:
@@ -252,8 +313,11 @@ def process_center(
     df = add_warmup_coldstart_flags(
         df, lookback_weeks=lookback, coldstart_threshold=COLDSTART_THRESHOLD_WEEKS
     )
+    df = add_sbc_features(df)
 
-    fallback_target_cols = [f"qty_lag{n}" for n in lag_weeks] + [f"qty_rollmean_{ROLL_WINDOW}"]
+    fallback_target_cols = [f"qty_lag{n}" for n in lag_weeks] + [
+        f"qty_rollmean_{ROLL_WINDOW}", "adi_expanding", "cv2_expanding",
+    ]
     df = add_category_fallback(df, fallback_target_cols)
 
     n_warmup = int(df["is_warmup"].sum())
