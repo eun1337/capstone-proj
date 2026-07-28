@@ -26,13 +26,20 @@ production 파일(train_base_model.py, base_model_cls/reg.pkl)과 완전히 분�
        진짜 비교 상대는 Hurdle Soft(둘 다 "연속적 기댓값" 방식)이고, Hurdle Hard는
        "임계값 컷오프를 쓰면 추가로 얼마나 더 좋아지는지"를 보여주는 별도 참고선으로만
        본다(evaluate_tweedie.py에서 비교표 출력 시 이 구분을 명시).
+    6) 하이퍼파라미터/가중치: data/ml/models/tuning/best_hyperparams.json이 있으면
+       tune_hyperparameters.py가 찾은 8종 파라미터 + tweedie_variance_power +
+       B센터 sample_weight 배수를 그대로 써서 단일 설정으로 학습(스윕 생략). 파일이
+       없으면 기존 VARIANCE_POWER_GRID 스윕으로 폴백(train_base_model.py와 동일 관례).
 """
+
+import json
 
 import lightgbm as lgb
 import numpy as np
 import pandas as pd
 
 from common import (
+    CENTER_COL,
     FEATURE_TABLE_PATH,
     MODEL_DIR,
     TARGET_COL,
@@ -45,13 +52,27 @@ from common import (
 )
 
 TWEEDIE_MODEL_PATH = MODEL_DIR / "tweedie_reg.pkl"
+BEST_HYPERPARAMS_PATH = MODEL_DIR / "tuning" / "best_hyperparams.json"
 
 VARIANCE_POWER_GRID = [1.3, 1.5, 1.7]
 LEARNING_RATE = 0.03
 NUM_LEAVES = 63
 N_ESTIMATORS = 1000
 EARLY_STOPPING_ROUNDS = 30
-FIXED_PARAMS = dict(subsample=0.8, colsample_bytree=0.8, random_state=42, n_jobs=-1)
+RANDOM_STATE = 42
+FIXED_PARAMS = dict(subsample=0.8, colsample_bytree=0.8, random_state=RANDOM_STATE, n_jobs=-1)
+
+
+def load_tuned_params() -> dict | None:
+    if not BEST_HYPERPARAMS_PATH.exists():
+        return None
+    with open(BEST_HYPERPARAMS_PATH, encoding="utf-8") as f:
+        data = json.load(f)
+    return data.get("tweedie", {}).get("best_params")
+
+
+def b_sample_weight(df: pd.DataFrame, b_weight: float) -> np.ndarray:
+    return np.where(df[CENTER_COL].to_numpy() == "B", b_weight, 1.0)
 
 
 def main():
@@ -74,37 +95,64 @@ def main():
     y_val = val_df[TARGET_COL]
     naive_val = val_df["qty"].to_numpy()
 
-    rows = []
-    best = None
-    for vp in VARIANCE_POWER_GRID:
-        print(f"[Tweedie] variance_power={vp} 학습 시작")
-        model = lgb.LGBMRegressor(
-            objective="tweedie", tweedie_variance_power=vp,
-            n_estimators=N_ESTIMATORS, learning_rate=LEARNING_RATE, num_leaves=NUM_LEAVES,
-            verbose=-1, **FIXED_PARAMS,
+    tuned_params = load_tuned_params()
+
+    if tuned_params is not None:
+        print(f"[Tweedie] tune_hyperparameters.py 결과 사용: {tuned_params}")
+        sw_train = b_sample_weight(train_df, tuned_params["b_center_weight"])
+        lgb_params = {k: tuned_params[k] for k in
+                      ["num_leaves", "max_depth", "learning_rate", "min_child_samples",
+                       "subsample", "colsample_bytree", "reg_alpha", "reg_lambda"]}
+        best_vp = tuned_params["tweedie_variance_power"]
+        best_model = lgb.LGBMRegressor(
+            objective="tweedie", tweedie_variance_power=best_vp,
+            n_estimators=N_ESTIMATORS, subsample_freq=1,
+            verbose=-1, random_state=RANDOM_STATE, n_jobs=-1, **lgb_params,
         )
-        model.fit(
-            X_train, y_train, eval_set=[(X_val, y_val)],
+        best_model.fit(
+            X_train, y_train, sample_weight=sw_train, eval_set=[(X_val, y_val)],
             callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False), lgb.log_evaluation(0)],
         )
-        pred_val = np.clip(model.predict(X_val), 0, None)
+        pred_val = np.clip(best_model.predict(X_val), 0, None)
         m = compute_metrics(y_val.to_numpy(), pred_val, naive_val)
-        best_iter = model.best_iteration_
-        print(f"  best_iter={best_iter}  val WAPE={m['WAPE']:.3f}%  val RMSE={m['RMSE']:.3f}  val Bias={m['Bias(%)']:+.3f}%")
-        rows.append({"variance_power": vp, "best_iteration": best_iter, **{k: round(v, 3) for k, v in m.items()}})
-        if best is None or m["WAPE"] < best[1]:
-            best = (model, m["WAPE"], vp)
+        best_wape = m["WAPE"]
+        print(f"  best_iter={best_model.best_iteration_}  val WAPE={m['WAPE']:.3f}%  "
+              f"val RMSE={m['RMSE']:.3f}  val Bias={m['Bias(%)']:+.3f}%")
+        grid_table = pd.DataFrame([{"variance_power": best_vp, "best_iteration": best_model.best_iteration_,
+                                     **{k: round(v, 3) for k, v in m.items()}}])
+    else:
+        print("[Tweedie] best_hyperparams.json 없음 -> 기존 variance_power 스윕으로 폴백")
+        rows = []
+        best = None
+        for vp in VARIANCE_POWER_GRID:
+            print(f"[Tweedie] variance_power={vp} 학습 시작")
+            model = lgb.LGBMRegressor(
+                objective="tweedie", tweedie_variance_power=vp,
+                n_estimators=N_ESTIMATORS, learning_rate=LEARNING_RATE, num_leaves=NUM_LEAVES,
+                verbose=-1, **FIXED_PARAMS,
+            )
+            model.fit(
+                X_train, y_train, eval_set=[(X_val, y_val)],
+                callbacks=[lgb.early_stopping(EARLY_STOPPING_ROUNDS, verbose=False), lgb.log_evaluation(0)],
+            )
+            pred_val = np.clip(model.predict(X_val), 0, None)
+            m = compute_metrics(y_val.to_numpy(), pred_val, naive_val)
+            best_iter = model.best_iteration_
+            print(f"  best_iter={best_iter}  val WAPE={m['WAPE']:.3f}%  val RMSE={m['RMSE']:.3f}  val Bias={m['Bias(%)']:+.3f}%")
+            rows.append({"variance_power": vp, "best_iteration": best_iter, **{k: round(v, 3) for k, v in m.items()}})
+            if best is None or m["WAPE"] < best[1]:
+                best = (model, m["WAPE"], vp)
+        best_model, best_wape, best_vp = best
+        grid_table = pd.DataFrame(rows)
 
-    grid_table = pd.DataFrame(rows)
     print()
     print("=" * 80)
-    print("[Tweedie variance_power 스윕 결과 (A val 기준)]")
+    print("[Tweedie 학습 결과]")
     print(grid_table.to_string(index=False))
-
-    best_model, best_wape, best_vp = best
     print(f"\n[채택] variance_power={best_vp} (val WAPE={best_wape:.3f}%)")
 
-    save_model_bundle(TWEEDIE_MODEL_PATH, best_model, feature_cols, variance_power=best_vp)
+    save_model_bundle(TWEEDIE_MODEL_PATH, best_model, feature_cols, variance_power=best_vp,
+                       tuned_params=tuned_params)
 
     print("[Tweedie] Feature Importance Top 15")
     print(pd.Series(best_model.feature_importances_, index=feature_cols).sort_values(ascending=False).head(15).to_string())
