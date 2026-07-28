@@ -84,10 +84,13 @@ def apply_target_date_boundary_filter(df: pd.DataFrame, horizon_weeks: int = 1) 
 def predict_base_hurdle(df: pd.DataFrame, cls_bundle: dict, reg_bundle: dict,
                          mode: str = HURDLE_MODE, threshold: float | None = None):
     """Hurdle Model 추론: 1단계 분류 확률 >= threshold면 2단계 조건부회귀값 채택,
-    아니면 0(hard, 기본) — threshold는 cls_bundle["threshold"](튜닝 과정에서 A val
-    split 기준 WAPE 최소화로 탐색해 저장한 값)를 우선 사용하고, 없으면 인자로 받은
-    threshold, 그마저 없으면 HURDLE_THRESHOLD로 폴백한다. soft 모드(확률 x 조건부
-    회귀값)는 threshold 없이 연속적인 기댓값을 원할 때 대안으로 남겨둔다."""
+    아니면 0(hard, 기본). threshold 결정 우선순위: (1) 함수 인자로 명시적으로 받은
+    threshold(스칼라, search_threshold_*.py처럼 전체에 동일 값을 스윕하며 비교할 때 씀)
+    -> (2) cls_bundle["threshold_by_center"](딕셔너리, 센터별로 다른 threshold를 쓰고
+    싶을 때 — search_threshold_extended.py가 A/B 각각의 val 기준 WAPE 최소화로 찾아
+    저장함. df["center_id"]로 행마다 다른 threshold를 매핑) -> (3) cls_bundle["threshold"]
+    (스칼라 폴백) -> (4) HURDLE_THRESHOLD(옛 bundle 하위호환용 최종 폴백). soft 모드
+    (확률 x 조건부회귀값)는 threshold 없이 연속적인 기댓값을 원할 때 대안으로 남겨둔다."""
     Xc = prepare_X(df, cls_bundle["feature_cols"])
     prob = cls_bundle["model"].predict_proba(Xc)[:, 1]
 
@@ -97,7 +100,13 @@ def predict_base_hurdle(df: pd.DataFrame, cls_bundle: dict, reg_bundle: dict,
     if mode == "soft":
         return prob * cond_qty
     if mode == "hard":
-        th = threshold if threshold is not None else cls_bundle.get("threshold", HURDLE_THRESHOLD)
+        if threshold is not None:
+            th = threshold
+        elif cls_bundle.get("threshold_by_center"):
+            fallback = cls_bundle.get("threshold", HURDLE_THRESHOLD)
+            th = df[CENTER_COL].map(cls_bundle["threshold_by_center"]).fillna(fallback).to_numpy()
+        else:
+            th = cls_bundle.get("threshold", HURDLE_THRESHOLD)
         return np.where(prob >= th, cond_qty, 0.0)
     raise ValueError(f"알 수 없는 mode: {mode}")
 

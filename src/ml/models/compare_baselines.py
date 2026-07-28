@@ -26,6 +26,7 @@ from common import (
     BASE_CLS_MODEL_PATH,
     BASE_MODEL_PATH,
     FEATURE_TABLE_PATH,
+    HURDLE_THRESHOLD,
     TARGET_COL,
     WALKFORWARD_FOLDS_PATH,
     compute_metrics,
@@ -33,40 +34,40 @@ from common import (
     predict_base_hurdle,
 )
 
-MODEL_NAMES = ["Zero-Predictor", "Naive(t-1)", "MA-4", "Hurdle Soft", "Hurdle Hard(th=0.80)"]
+BASE_MODEL_NAMES = ["Zero-Predictor", "Naive(t-1)", "MA-4", "Hurdle Soft"]
 
 
-def build_preds(sub_df: pd.DataFrame, cls_bundle: dict, reg_bundle: dict) -> dict:
+def build_preds(sub_df: pd.DataFrame, cls_bundle: dict, reg_bundle: dict, hurdle_hard_label: str) -> dict:
     naive_ref = sub_df["qty"].to_numpy()
     return {
         "Zero-Predictor": np.zeros(len(sub_df)),
         "Naive(t-1)": naive_ref,
         "MA-4": sub_df["qty_rollmean_4_filled"].to_numpy(),
         "Hurdle Soft": predict_base_hurdle(sub_df, cls_bundle, reg_bundle, mode="soft"),
-        "Hurdle Hard(th=0.80)": predict_base_hurdle(sub_df, cls_bundle, reg_bundle, mode="hard"),
+        hurdle_hard_label: predict_base_hurdle(sub_df, cls_bundle, reg_bundle, mode="hard"),
     }
 
 
-def evaluate_a_all(df: pd.DataFrame, cls_bundle, reg_bundle) -> pd.DataFrame:
+def evaluate_a_all(df: pd.DataFrame, cls_bundle, reg_bundle, model_names: list[str], hurdle_hard_label: str) -> pd.DataFrame:
     a_test = df[(df["center_id"] == "A") & (df["split"] == "test")].copy()
     a_test = a_test[a_test[TARGET_COL].notna()]
     y_true = a_test[TARGET_COL].to_numpy()
     naive_ref = a_test["qty"].to_numpy()
 
-    preds = build_preds(a_test, cls_bundle, reg_bundle)
+    preds = build_preds(a_test, cls_bundle, reg_bundle, hurdle_hard_label)
     rows = []
-    for name in MODEL_NAMES:
+    for name in model_names:
         m = compute_metrics(y_true, preds[name], naive_ref)
         rows.append({"model": name, "n": len(a_test), **{k: round(v, 3) for k, v in m.items()}})
     return pd.DataFrame(rows)
 
 
-def evaluate_b_all(df: pd.DataFrame, cls_bundle, reg_bundle) -> pd.DataFrame:
+def evaluate_b_all(df: pd.DataFrame, cls_bundle, reg_bundle, model_names: list[str], hurdle_hard_label: str) -> pd.DataFrame:
     with open(WALKFORWARD_FOLDS_PATH, encoding="utf-8") as f:
         folds = json.load(f)
     b_pool = df[(df["center_id"] == "B") & (df["split"] == "pool")].copy()
 
-    accum = {name: {"true": [], "pred": [], "naive": []} for name in MODEL_NAMES}
+    accum = {name: {"true": [], "pred": [], "naive": []} for name in model_names}
 
     for train_start, train_end, val_start, val_end in folds:
         mask = (b_pool["week_st"] >= val_start) & (b_pool["week_st"] <= val_end)
@@ -76,14 +77,14 @@ def evaluate_b_all(df: pd.DataFrame, cls_bundle, reg_bundle) -> pd.DataFrame:
             continue
         y_true = fold_df[TARGET_COL].to_numpy()
         naive_ref = fold_df["qty"].to_numpy()
-        preds = build_preds(fold_df, cls_bundle, reg_bundle)
-        for name in MODEL_NAMES:
+        preds = build_preds(fold_df, cls_bundle, reg_bundle, hurdle_hard_label)
+        for name in model_names:
             accum[name]["true"].append(y_true)
             accum[name]["pred"].append(preds[name])
             accum[name]["naive"].append(naive_ref)
 
     rows = []
-    for name in MODEL_NAMES:
+    for name in model_names:
         y_true_all = np.concatenate(accum[name]["true"])
         y_pred_all = np.concatenate(accum[name]["pred"])
         naive_all = np.concatenate(accum[name]["naive"])
@@ -96,24 +97,36 @@ def main():
     df = pd.read_parquet(FEATURE_TABLE_PATH)
     cls_bundle = load_model_bundle(BASE_CLS_MODEL_PATH)
     reg_bundle = load_model_bundle(BASE_MODEL_PATH)
-    print(f"[Hurdle Hard threshold] {cls_bundle.get('threshold')}")
+    # predict_base_hurdle(mode="hard")이 실제로 쓰는 threshold 결정 로직과 동일하게 맞춰야
+    # 라벨과 계산값이 항상 일치한다. threshold_by_center가 있으면(센터별 threshold 적용
+    # 중) 라벨에 A/B 값을 각각 명시 — 없는 옛 bundle이면 스칼라 threshold(그마저 없으면
+    # HURDLE_THRESHOLD)로 폴백해 하나의 값만 표시.
+    threshold_by_center = cls_bundle.get("threshold_by_center")
+    if threshold_by_center:
+        hurdle_hard_label = f"Hurdle Hard(th_A={threshold_by_center['A']:.2f},th_B={threshold_by_center['B']:.2f})"
+        print(f"[Hurdle Hard threshold] {threshold_by_center}")
+    else:
+        threshold = cls_bundle.get("threshold", HURDLE_THRESHOLD)
+        hurdle_hard_label = f"Hurdle Hard(th={threshold:.2f})"
+        print(f"[Hurdle Hard threshold] {threshold}")
+    model_names = BASE_MODEL_NAMES + [hurdle_hard_label]
 
     print("=" * 80)
     print("[A센터] Simple Baseline 3종 vs SBC Hurdle Model (A_test 홀드아웃)")
-    report_a = evaluate_a_all(df, cls_bundle, reg_bundle)
+    report_a = evaluate_a_all(df, cls_bundle, reg_bundle, model_names, hurdle_hard_label)
     print(report_a.to_string(index=False))
 
     print()
     print("=" * 80)
     print("[B센터] Simple Baseline 3종 vs SBC Hurdle Model (53-fold walk-forward 합산)")
-    report_b = evaluate_b_all(df, cls_bundle, reg_bundle)
+    report_b = evaluate_b_all(df, cls_bundle, reg_bundle, model_names, hurdle_hard_label)
     print(report_b.to_string(index=False))
 
     print()
     print("=" * 80)
-    print("[WAPE 개선율(%) vs Simple Baseline] (Hurdle Hard th=0.80 기준, 음수=개선)")
+    print(f"[WAPE 개선율(%) vs Simple Baseline] ({hurdle_hard_label} 기준, 음수=개선)")
     for label, report in [("A", report_a), ("B", report_b)]:
-        ml_row = report[report["model"] == "Hurdle Hard(th=0.80)"].iloc[0]
+        ml_row = report[report["model"] == hurdle_hard_label].iloc[0]
         for base_name in ["Zero-Predictor", "Naive(t-1)", "MA-4"]:
             base_row = report[report["model"] == base_name].iloc[0]
             wape_improve = (ml_row["WAPE"] - base_row["WAPE"]) / base_row["WAPE"] * 100
