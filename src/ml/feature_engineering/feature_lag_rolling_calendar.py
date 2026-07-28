@@ -40,7 +40,10 @@ lag, rolling, 캘린더 feature를 한 번에 계산한 뒤, 원래 분할 기�
        NaN 유지(coldstart_flag/is_warmup이 이미 그 상태를 표시하므로 억지로 채우지 않음)
    10) get_excluded_cols(): target_* 컬럼 + ID 컬럼(center_id/sku_id/week_st) +
        진단용 `_fill_source` 컬럼 + 변환 필요 컬럼(sku_last_active_week 원본, datetime 타입이라
-       모델 입력 불가 - 숫자로 변환된 weeks_since_last_active는 제외 대상 아님)을 합쳐 반환.
+       모델 입력 불가 - 숫자로 변환된 weeks_since_last_active는 제외 대상 아님) + 고카디널리티
+       텍스트 컬럼(HIGH_CARDINALITY_TEXT_COLS = 상품명/규격, SKU 암기로 인한 과적합 및
+       Day2 콜드스타트/카테고리 fallback 설계 충돌 방지 — KAN_대/중/소분류는 저카디널리티
+       범주형이라 제외 대상 아님)을 합쳐 반환.
        Day11+ 학습 코드에서 import해서 feature_cols 구성에 사용. LightGBM/SVM 트랙별
        원본 vs `_filled` 선택은 이 함수에 포함되지 않으며 트랙별로 별도 처리 필요
 """
@@ -365,11 +368,21 @@ DIAGNOSTIC_COL_SUFFIXES = ("_fill_source",)
 
 NEEDS_TRANSFORM_COLS = ["sku_last_active_week"]
 
+# 상품명(nunique=18,954, 사실상 sku_id 1:1)과 규격(nunique=1,324)은 KAN_대/중/소분류
+# (11/85/270)와 달리 사실상 식별자에 가까운 고카디널리티 텍스트라 트리 모델이 학습 시
+# 봤던 SKU의 정답을 암기(lookup table화)하는 통로가 된다 — Train/Val 성과 착시를 만들고,
+# 정작 Test 시점의 신상품(coldstart_flag=True)에는 한 번도 못 본 값이라 무작위 노이즈로만
+# 작동해 Day2 카테고리 fallback(계단식 평균) 설계 취지와 정면으로 충돌한다. 그래서 이
+# 함수 하나에서 걸러내 get_excluded_cols/get_base_model_excluded_cols를 쓰는 모든
+# 학습 스크립트(Base 통합/센터별 분리/Tweedie)에 동일하게 적용되도록 한다.
+HIGH_CARDINALITY_TEXT_COLS = ["상품명", "규격"]
+
 
 def get_excluded_cols(df: pd.DataFrame) -> list[str]:
     target_cols = [c for c in df.columns if c.startswith("target_")]
     diagnostic_cols = [c for c in df.columns if c.endswith(DIAGNOSTIC_COL_SUFFIXES)]
-    return ID_COLS + target_cols + diagnostic_cols + NEEDS_TRANSFORM_COLS
+    high_card_cols = [c for c in HIGH_CARDINALITY_TEXT_COLS if c in df.columns]
+    return ID_COLS + target_cols + diagnostic_cols + NEEDS_TRANSFORM_COLS + high_card_cols
 
 
 if __name__ == "__main__":
