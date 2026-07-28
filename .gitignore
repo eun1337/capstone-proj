@@ -15,3 +15,4 @@ output.txt
 *.session.sql
 analysis-results/
 src/ml/feature_engineering/*_log.txt
+src/ml/models/*_log.txt

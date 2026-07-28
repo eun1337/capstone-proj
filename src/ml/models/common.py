@@ -103,11 +103,12 @@ def predict_base_hurdle(df: pd.DataFrame, cls_bundle: dict, reg_bundle: dict,
 
 
 def prepare_X(df: pd.DataFrame, feature_cols: list[str]) -> pd.DataFrame:
-    """object dtype 컬럼(KAN_대/중/소분류, 상품명, 규격 등 텍스트)은 LightGBM이
-    바로 못 받으므로 category dtype으로 변환. 그 외 dtype은 그대로 둔다."""
+    """object dtype 뿐 아니라 pandas의 신규 string dtype(str/string[pyarrow] 등,
+    parquet 읽을 때 pyarrow 엔진이 텍스트 컬럼을 이렇게 추론하는 경우가 있음)도
+    LightGBM이 못 받으므로 함께 category로 변환. 숫자/불리언 dtype만 그대로 둔다."""
     X = df[feature_cols].copy()
     for col in X.columns:
-        if X[col].dtype == object:
+        if not (pd.api.types.is_numeric_dtype(X[col]) or pd.api.types.is_bool_dtype(X[col])):
             X[col] = X[col].astype("category")
     return X
 
