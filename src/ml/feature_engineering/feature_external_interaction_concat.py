@@ -6,10 +6,20 @@ Day2 산출물(data/ml/splits/*_feat.parquet, 5개: A_train/A_val/A_test/B_train
 읽어 하나로 합친 뒤, 아래를 추가하고 단일 parquet(feature_table_final.parquet)으로 저장한다.
 
 핵심 설계:
-    1) 공휴일_D0/D-1/D+1: 공휴일은 SKU와 무관한 (center_id, week_st) 단위 캘린더 속성이므로,
-       distinct 캘린더 프레임에서 인접 주(전주/다음주) 값을 구한 뒤 merge한다.
-       (SKU별 grid_start가 서로 달라 SKU 그룹 단위로 shift하면 시작 경계에서 인접 주가
-       실제로는 존재하는데도 다른 SKU 기준으로 밀려 누락될 위험이 있음)
+    1) 공휴일_W0/W-1/W+1: 예전엔 (center_id, week_st) 단위로 거래 데이터에 조인된 원본
+       `공휴일`(설날/추석 여부, 해당 날짜에 실제 매출/출고 거래가 있어야만 값이 매겨짐)을
+       그대로 shift해서 D0/D-1/D+1을 만들었는데, **B센터는 명절 당일 전후로 출고 거래
+       자체를 거의 기록하지 않아 B 전체(train+pool 60만 행)에서 이 컬럼이 단 한 번도
+       1인 적이 없는 구조적 결함이 있었음**(실측 확인 — sql/join/master_join.sql의
+       공휴일 조인은 (년,월,일)만으로 매칭해 center 의존성이 아예 없고 A/B 동일 로직인데도,
+       B는 매칭할 거래 행 자체가 없어서 발생한 문제. `B센터_명절휴무`라는 B 전용 하드코딩
+       패치가 있었던 이유이기도 함). 그래서 **거래 유무와 완전히 무관한 순수 캘린더 기준**
+       (KOREAN_LUNAR_HOLIDAYS, 공식 설날/추석 연휴+대체공휴일/임시공휴일 날짜를 A(2021~)/
+       B(2023~) 관측 범위 전체에 대해 하드코딩)으로 재설계해 A/B 공통 단일 변수 3개로
+       통합했다. W0=이번 주가 명절 포함 주, W-1=다음 주가 명절 포함 주(LEAD),
+       W+1=지난 주가 명절 포함 주(LAG) — 팀 확정 정의(숫자 부호와 시제가 반대인 비통상적
+       관례이니 주의). 거래-조인 기반 원본 `공휴일`/`공휴일_D0/D-1/D+1`/`B센터_명절휴무`는
+       전부 제거하고 이 3개로 완전히 대체함.
     2) 강수량_호우_flag/count: 주 단위로 미리 집계된 총강수량에서 분위수를 구하면 주간
        평탄화로 특정 하루의 극단 이벤트가 상쇄되어 묻히므로, 반드시 일별(raw) 원본 기후
        데이터에서 먼저 하루 단위로 극단 여부를 판정한 뒤 주 단위로 집계(count/flag)한다.
@@ -34,10 +44,7 @@ Day2 산출물(data/ml/splits/*_feat.parquet, 5개: A_train/A_val/A_test/B_train
          전체 데이터에서 양성 발생이 0~2건뿐인 영분산(zero-variance) dead feature가 됨을
          확인. 대신 평균온도/총강수량을 그대로 연속형 feature로 남겨(트리 모델이 스스로
          비선형 임계점을 학습하도록) temp_x_precip(=평균온도*총강수량) 상호작용만 추가.
-    3) B센터_명절휴무: 원본 데이터에 명절(설날/추석) 식별 컬럼이 없어, B 관측기간
-       (2023-07~2024-12) 내 공식 대한민국 공휴일 캘린더 기준으로 설날/추석 연휴+대체공휴일이
-       포함된 주(week_st)를 수동 지정. A센터는 항상 0.
-    4) center_is_B / temp_x_precip: 통합 모델 1개가 센터별 차이를 반영하도록 하는 상호작용
+    3) center_is_B / temp_x_precip: 통합 모델 1개가 센터별 차이를 반영하도록 하는 상호작용
        feature. `qty_lag1 * center_is_B` 형태의 명시적 곱셈 상호작용은 의도적으로 생성하지
        않음 — qty_lag1은 Base Model 핵심 공통 feature라 트리 모델(LightGBM)이 center 계열
        feature와 조합해 스스로 상호작용을 학습할 수 있고, 인위적 곱 feature가 B센터(26주
@@ -45,10 +52,10 @@ Day2 산출물(data/ml/splits/*_feat.parquet, 5개: A_train/A_val/A_test/B_train
        성능 검증에서 B 오차가 크게 나오면 그때 추가 실험 과제로 재검토). 기온_극단_flag가
        폐기되면서 여기 의존하던 inter_center_temp_extreme도 함께 제거함 — 대신 평균온도*
        총강수량의 연속형 상호작용(temp_x_precip)을 추가.
-    5) weeks_since_last_active_filled: Day2에서 만든 원본(datetime 파생, 미판매 행은 NaN)을
+    4) weeks_since_last_active_filled: Day2에서 만든 원본(datetime 파생, 미판매 행은 NaN)을
        SVM/신경망 등 NaN 미지원 모델용으로, 임의의 큰 값(999 등) 대신 관측 가능한
        최대 주수(156, 상수 MAX_WEEKS_SINCE_ACTIVE)로 capping하여 채움.
-    6) get_excluded_cols()는 Day2(feature_lag_rolling_calendar.py)의 정의를 그대로 재사용.
+    5) get_excluded_cols()는 Day2(feature_lag_rolling_calendar.py)의 정의를 그대로 재사용.
        target_*, ID 컬럼, 진단용 _fill_source, sku_last_active_week(datetime 원본)을 제외.
        center_id는 ID_COLS에 포함되어 있으므로 원본 문자열은 여전히 제외되고,
        대신 숫자형 파생인 center_is_B가 feature로 흘러들어가는 구조를 그대로 유지한다.
@@ -87,14 +94,17 @@ MAX_WEEKS_SINCE_ACTIVE = 156
 # 기온(폭염 33/한파 -12)은 일 평균기온 기준으로는 영분산 dead feature가 되어 폐기 — 아래 참고
 HEAVY_RAIN_THRESHOLD = 80.0      # 이상이면 호우
 
-# B센터 관측기간(2023-07~2024-12) 내 설날/추석 연휴 + 대체공휴일이 포함된 주(week_st, 월요일).
-# 원본 데이터에 명절 식별 컬럼이 없어 공식 공휴일 캘린더 기준으로 수동 지정.
-B_HOLIDAY_WEEKS = pd.to_datetime([
-    "2023-09-25",  # 추석 연휴(9/28~30) 포함 주
-    "2023-10-02",  # 추석 대체공휴일(10/2) 포함 주
-    "2024-02-05",  # 설날 연휴(2/9~11) 포함 주
-    "2024-02-12",  # 설날 대체공휴일(2/12) 포함 주
-    "2024-09-16",  # 추석 연휴(9/16~18) 포함 주
+# 공식 대한민국 설날/추석 연휴 + 대체공휴일/임시공휴일 날짜 전체 목록(A 2021~/B 2023~ 관측
+# 범위를 모두 커버). 거래 유무와 무관한 순수 캘린더 기준이라 A/B 공통으로 그대로 쓴다.
+KOREAN_LUNAR_HOLIDAYS = pd.to_datetime([
+    "2021-02-11", "2021-02-12", "2021-02-13",  # 2021 설날
+    "2021-09-20", "2021-09-21", "2021-09-22",  # 2021 추석
+    "2022-01-31", "2022-02-01", "2022-02-02",  # 2022 설날
+    "2022-09-09", "2022-09-10", "2022-09-11", "2022-09-12",  # 2022 추석(+대체공휴일 9/12)
+    "2023-01-21", "2023-01-22", "2023-01-23", "2023-01-24",  # 2023 설날(+대체공휴일 1/24)
+    "2023-09-28", "2023-09-29", "2023-09-30", "2023-10-02",  # 2023 추석(+임시공휴일 10/2)
+    "2024-02-09", "2024-02-10", "2024-02-11", "2024-02-12",  # 2024 설날(+대체공휴일 2/12)
+    "2024-09-16", "2024-09-17", "2024-09-18",  # 2024 추석
 ])
 
 
@@ -111,17 +121,20 @@ def load_all_feat() -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
-def add_holiday_window_features(df: pd.DataFrame) -> pd.DataFrame:
-    cal = (
-        df[[CENTER_COL, WEEK_COL, "공휴일"]]
-        .drop_duplicates()
-        .sort_values([CENTER_COL, WEEK_COL])
-        .reset_index(drop=True)
-    )
-    cal["공휴일_D-1"] = cal.groupby(CENTER_COL)["공휴일"].shift(1).fillna(0).astype(int)
-    cal["공휴일_D+1"] = cal.groupby(CENTER_COL)["공휴일"].shift(-1).fillna(0).astype(int)
-    cal = cal.rename(columns={"공휴일": "공휴일_D0"})
-    df = df.merge(cal, on=[CENTER_COL, WEEK_COL], how="left")
+def add_holiday_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
+    """공휴일_W0/W-1/W+1: 거래 유무와 무관한 순수 캘린더(설날/추석) 기준 A/B 공통 단일 변수.
+    옛 거래-조인 방식(공휴일_D0)은 B가 명절 당일 출고를 거의 기록하지 않아 B 전체가 항상
+    0이 되는 구조적 결함이 있었음(모듈 docstring 1번 참고). KOREAN_LUNAR_HOLIDAYS의 각 날짜를
+    그 날짜가 속한 주(week_st, 월요일)로 변환해 "명절이 포함된 주" 집합을 만들고, 이 집합에
+    대한 소속 여부만으로 판정하므로 어떤 거래 기록도 필요 없다.
+    W0=이번 주, W-1=다음 주(LEAD), W+1=지난 주(LAG) — 팀 확정 정의."""
+    holiday_dates = pd.Series(KOREAN_LUNAR_HOLIDAYS)
+    holiday_week_starts = holiday_dates - pd.to_timedelta(holiday_dates.dt.weekday, unit="D")
+    holiday_weeks = set(holiday_week_starts)
+
+    df["공휴일_W0"] = df[WEEK_COL].isin(holiday_weeks).astype(int)
+    df["공휴일_W-1"] = (df[WEEK_COL] + pd.Timedelta(weeks=1)).isin(holiday_weeks).astype(int)
+    df["공휴일_W+1"] = (df[WEEK_COL] - pd.Timedelta(weeks=1)).isin(holiday_weeks).astype(int)
     return df
 
 
@@ -168,14 +181,6 @@ def add_climate_extreme_flags(df: pd.DataFrame) -> pd.DataFrame:
 
 def add_covid_flag(df: pd.DataFrame) -> pd.DataFrame:
     df["covid_flag"] = df["covid_영향여부"].astype(int)
-    return df
-
-
-def add_b_holiday_flag(df: pd.DataFrame) -> pd.DataFrame:
-    df["B센터_명절휴무"] = 0
-    is_b = df[CENTER_COL] == "B"
-    is_holiday_week = df[WEEK_COL].isin(B_HOLIDAY_WEEKS)
-    df.loc[is_b & is_holiday_week, "B센터_명절휴무"] = 1
     return df
 
 
@@ -226,7 +231,7 @@ def run_sanity_checks(df: pd.DataFrame) -> None:
     sample_cols = [
         CENTER_COL, WEEK_COL, "center_is_B", "평균온도", "총강수량", "temp_x_precip",
         "강수량_호우_flag", "강수량_호우_count",
-        "공휴일_D-1", "공휴일_D0", "공휴일_D+1", "B센터_명절휴무",
+        "공휴일_W-1", "공휴일_W0", "공휴일_W+1",
     ]
     print(df[sample_cols].sample(5, random_state=42).to_string(index=False))
     print("  (참고: qty_lag1 * center_is_B 상호작용 및 기온_극단_flag/count(영분산으로 폐기)는 미생성)")
@@ -290,12 +295,15 @@ def main():
     df = load_all_feat()
     print(f"[Day3] 5개 Day2 산출물 통합: {len(df):,}행 (A+B, train/val/test/pool)")
 
-    df = add_holiday_window_features(df)
+    df = add_holiday_calendar_features(df)
     df = add_climate_extreme_flags(df)
     df = add_covid_flag(df)
-    df = add_b_holiday_flag(df)
     df = add_interaction_features(df)
     df = add_weeks_since_active_filled(df)
+
+    # 거래-조인 기반 원본 공휴일 컬럼은 B에서 구조적으로 항상 0이라(모듈 docstring 1번 참고)
+    # 공휴일_W0/W-1/W+1로 완전히 대체됨 — 혼동 방지를 위해 최종 산출물에서 제거
+    df = df.drop(columns=["공휴일"])
 
     df[CENTER_COL] = df[CENTER_COL].astype("category")
 
