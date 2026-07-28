@@ -20,6 +20,14 @@ feature_table_final.parquet에서 SKU를 모두 합산한 (center_id, week_st) �
        매 스텝 실제값이 반영되므로 진짜 rolling-origin 평가이고, 계산 비용도 감당 가능.
     4) 평가 구간: A=val+test(2024 전체), B=pool(2024 전체, 2023-07~12 학습 이후).
     5) Horizon: A=1/4/8주, B=1/4주(B는 학습 데이터 부족으로 8주는 시도하지 않음).
+    6) 지표: common.compute_metrics()를 그대로 재사용해 ML 트랙(Hurdle/Tweedie)과
+       RMSE/MAE/WAPE/MASE/Bias(%) 정의를 100% 통일한다. naive_pred(MASE 분모, 1스텝
+       지연 단순예측)는 ML 트랙의 "qty=해당 행 자기 주 실측"과 동일한 개념으로, 각
+       origin에서 예측을 만들기 직전까지 관측된 마지막 실제값(= 그 시점까지의 마지막
+       actual, horizon과 무관하게 그 origin의 모든 h에 공통 재사용)을 사용한다.
+       단, 그럼에도 **WAPE/Bias(%) 수치를 ML 트랙과 절대값으로 직접 비교하면 안 된다**
+       — 여전히 grain이 다르다(ARIMA=센터 전체 SKU 합산 단일 시계열, ML=SKU×주 개별
+       행). 같은 원(총수요)에 대한 상대적 오차율이라는 의미에서만 참고할 것.
 """
 
 from pathlib import Path
@@ -30,6 +38,8 @@ import pandas as pd
 from pmdarima import auto_arima
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.stattools import adfuller, kpss
+
+from common import compute_metrics
 
 warnings.filterwarnings("ignore")
 
@@ -102,15 +112,19 @@ def fit_auto_arima(train_vals: np.ndarray, d_fixed: int):
 
 
 def rolling_origin_eval(train_vals: np.ndarray, eval_vals: np.ndarray, order: tuple, horizons: list[int]) -> dict:
-    """origin을 한 주씩 전진시키며 각 horizon의 (y_true, y_pred) 쌍을 모은다.
-    매 스텝 order 재탐색 없이 SARIMAX.append(refit=False)로 Kalman 업데이트만 수행."""
+    """origin을 한 주씩 전진시키며 각 horizon의 (y_true, y_pred, naive_pred) 쌍을 모은다.
+    매 스텝 order 재탐색 없이 SARIMAX.append(refit=False)로 Kalman 업데이트만 수행.
+    naive_pred는 그 origin에서 예측을 만들기 직전까지 관측된 마지막 실제값(1스텝 지연
+    단순예측, ML 트랙의 naive_pred=qty와 동일 개념) — horizon과 무관하게 그 origin의
+    모든 h가 공유한다."""
     res = SARIMAX(
         list(train_vals), order=order, enforce_stationarity=False, enforce_invertibility=False
     ).fit(disp=False)
 
     max_h = max(horizons)
-    collected = {h: {"y_true": [], "y_pred": []} for h in horizons}
+    collected = {h: {"y_true": [], "y_pred": [], "naive_pred": []} for h in horizons}
     n_eval = len(eval_vals)
+    last_observed = train_vals[-1] if len(train_vals) > 0 else np.nan
 
     for i in range(n_eval):
         fc = res.get_forecast(steps=max_h).predicted_mean
@@ -120,17 +134,11 @@ def rolling_origin_eval(train_vals: np.ndarray, eval_vals: np.ndarray, order: tu
             if idx < n_eval:
                 collected[h]["y_true"].append(eval_vals[idx])
                 collected[h]["y_pred"].append(fc[h - 1])
+                collected[h]["naive_pred"].append(last_observed)
         res = res.append([eval_vals[i]], refit=False)
+        last_observed = eval_vals[i]
 
     return collected
-
-
-def rmse_mae(y_true: list, y_pred: list) -> tuple:
-    y_true = np.asarray(y_true, dtype=float)
-    y_pred = np.asarray(y_pred, dtype=float)
-    rmse = float(np.sqrt(np.mean((y_true - y_pred) ** 2)))
-    mae = float(np.mean(np.abs(y_true - y_pred)))
-    return rmse, mae
 
 
 def run_center(df: pd.DataFrame, center: str, d_fixed: int, horizons: list[int], eval_splits: list[str]) -> pd.DataFrame:
@@ -156,10 +164,11 @@ def run_center(df: pd.DataFrame, center: str, d_fixed: int, horizons: list[int],
     for h in horizons:
         n = len(collected[h]["y_true"])
         if n == 0:
-            rows.append({"center": center, "horizon": f"h{h}", "n": 0, "RMSE": np.nan, "MAE": np.nan})
+            rows.append({"center": center, "horizon": f"h{h}", "n": 0, "RMSE": np.nan, "MAE": np.nan,
+                         "WAPE": np.nan, "MASE": np.nan, "Bias(%)": np.nan})
             continue
-        rmse, mae = rmse_mae(collected[h]["y_true"], collected[h]["y_pred"])
-        rows.append({"center": center, "horizon": f"h{h}", "n": n, "RMSE": round(rmse, 2), "MAE": round(mae, 2)})
+        m = compute_metrics(collected[h]["y_true"], collected[h]["y_pred"], collected[h]["naive_pred"])
+        rows.append({"center": center, "horizon": f"h{h}", "n": n, **{k: round(v, 3) for k, v in m.items()}})
     return pd.DataFrame(rows)
 
 
@@ -171,7 +180,9 @@ def main():
 
     print()
     print("=" * 80)
-    print("[ARIMA Baseline 성능표] (A/B 분리, RMSE/MAE)")
+    print("[ARIMA Baseline 성능표] (A/B 분리, RMSE/MAE/WAPE/MASE/Bias(%), common.compute_metrics 동일 정의)")
+    print("  ※ grain 주의: 센터 전체 SKU 합산 단일 시계열 기준 — SKU×주 개별 행 기준인")
+    print("    Hurdle/Tweedie 트랙과 절대 수치를 직접 비교하지 말 것(상대적 참고만)")
     report = pd.concat([result_a, result_b], ignore_index=True)
     print(report.to_string(index=False))
 
