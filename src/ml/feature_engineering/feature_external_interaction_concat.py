@@ -10,7 +10,7 @@ Day2 산출물(data/ml/splits/*_feat.parquet, 5개: A_train/A_val/A_test/B_train
        distinct 캘린더 프레임에서 인접 주(전주/다음주) 값을 구한 뒤 merge한다.
        (SKU별 grid_start가 서로 달라 SKU 그룹 단위로 shift하면 시작 경계에서 인접 주가
        실제로는 존재하는데도 다른 SKU 기준으로 밀려 누락될 위험이 있음)
-    2) 강수량_상위5%_flag/count: 주 단위로 미리 집계된 총강수량에서 분위수를 구하면 주간
+    2) 강수량_호우_flag/count: 주 단위로 미리 집계된 총강수량에서 분위수를 구하면 주간
        평탄화로 특정 하루의 극단 이벤트가 상쇄되어 묻히므로, 반드시 일별(raw) 원본 기후
        데이터에서 먼저 하루 단위로 극단 여부를 판정한 뒤 주 단위로 집계(count/flag)한다.
        일별 원본은 별도 외부 기후 CSV를 다시 지역 매칭하지 않고, data/final/
@@ -158,9 +158,9 @@ def add_climate_extreme_flags(df: pd.DataFrame) -> pd.DataFrame:
 
     daily[WEEK_COL] = daily["date"] - pd.to_timedelta(daily["date"].dt.weekday, unit="D")
     weekly = daily.groupby([CENTER_COL, WEEK_COL], as_index=False).agg(
-        **{"강수량_상위5%_count": ("_rain_extreme_day", "sum")},
+        **{"강수량_호우_count": ("_rain_extreme_day", "sum")},
     )
-    weekly["강수량_상위5%_flag"] = (weekly["강수량_상위5%_count"] > 0).astype(int)
+    weekly["강수량_호우_flag"] = (weekly["강수량_호우_count"] > 0).astype(int)
 
     df = df.merge(weekly, on=[CENTER_COL, WEEK_COL], how="left")
     return df
@@ -225,7 +225,7 @@ def run_sanity_checks(df: pd.DataFrame) -> None:
     print("[Sanity Check 2] 상호작용 / 외부변수 Feature 샘플 5행")
     sample_cols = [
         CENTER_COL, WEEK_COL, "center_is_B", "평균온도", "총강수량", "temp_x_precip",
-        "강수량_상위5%_flag", "강수량_상위5%_count",
+        "강수량_호우_flag", "강수량_호우_count",
         "공휴일_D-1", "공휴일_D0", "공휴일_D+1", "B센터_명절휴무",
     ]
     print(df[sample_cols].sample(5, random_state=42).to_string(index=False))
