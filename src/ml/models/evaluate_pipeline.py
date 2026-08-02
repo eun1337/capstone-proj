@@ -8,13 +8,26 @@ Hurdle Base Model(분류+조건부회귀, train_base_model.py에서 튜닝됨) �
 common.py 모듈 docstring 참고).
 
 핵심 설계:
-    1) 추론 로직: mode="soft"(기본, 파이프라인 공식 기준점) = P(수요>0) x E[수량|수요>0].
-       mode="hard"(`python evaluate_pipeline.py hard`)는 cls_bundle["threshold"] 이상일
-       때만 조건부회귀값을 채택 — hard 모드 threshold 탐색에서 WAPE와 Bias가 서로 다른
-       지점을 최적으로 가리키는 트레이드오프가 확인되어(threshold 탐색 로그 참고),
-       하나의 지표로 단일 최적값을 정하기 어려움. 그래서 soft(확률 기댓값, 임의
-       하이퍼파라미터인 threshold가 없어 편향 없이 연속적인 값을 내는 방식)를 공식
-       파이프라인 기준점으로 확정함.
+    1) 추론 로직 기본값 변경(2026-08-02, 팀 확정): mode="hard"(기본, 파이프라인 공식
+       기준점) = P(수요>0)>=cls_bundle["threshold"]일 때만 조건부회귀값 채택, 아니면 0.
+       원래는 soft(확률 기댓값)가 기준점이었으나, center_interaction_ablation 실험
+       (src/ml/experiments/center_interaction/)에서 상호작용 피처(center_qty_lag1_inter/
+       center_temp_inter) 추가 후 Hard(th=0.50) vs Soft를 다시 비교한 결과 이번 모델
+       조합에서는 Hard가 A/B 모두 Soft보다 우수함을 확인해(A WAPE: Hard 73.57% vs
+       Soft 77.26%, B WAPE: Hard 84.94% vs Soft 86.20%, Bias도 Hard가 덜 나쁨) Hard를
+       공식 기준점으로 재확정함.
+       threshold=0.46(최종, 2026-08-02 재확정): 처음엔 0.20~0.75 확장 재탐색에서 WAPE가
+       최소가 되는 지점을 찾다가(SKU x 주 grain 기준 0.50→0.54로 갈수록 WAPE가 계속
+       좋아 보였음) Bias가 -33%대까지 폭주하는 트레이드오프를 발견해 0.50으로 일단
+       고정했었으나, build_final_scorecard.py로 실제 재고/발주 집계 단위인 센터 x 주
+       Roll-up grain(P4 체크리스트 공식 기준)에서 재평가한 결과 순위가 뒤집혔다 — SKU x 주
+       grain은 SKU별 과다/과소 오차가 상쇄되지 않아 WAPE가 부풀려지는 착시가 있었고,
+       Roll-up 기준으로는 th=0.50이 오히려 Baseline보다 B WAPE가 악화(18.03%→18.92%)되는
+       반면 th=0.46은 B WAPE를 18.03%→16.55%(-1.48%p)로 실개선하고 A Bias도 +0.57%로
+       거의 무편향이라 0.46을 최종 채택함(팀 확정, data/ml/experiments/
+       center_interaction_ablation/reports/final_scorecard.csv 참고).
+       mode="soft"(`python evaluate_pipeline.py soft`)는 여전히 지원되나 더 이상 기본값이
+       아니며 참고용 비교 옵션으로만 남겨둠.
     2) A 평가: A_test split(2024-07~12, 최종 홀드아웃)에서 target_h1 기준.
     3) B 평가: B_walkforward_folds.json의 53-fold(각 fold=1주짜리 val 구간)를 그대로
        순회하며 Pool(2024 전체) 구간을 주 단위로 채점한다. "walk-forward"는 매 fold마다
@@ -125,7 +138,7 @@ def evaluate_b_walkforward(df: pd.DataFrame, cls_bundle, reg_bundle, mode: str =
 
 
 def main():
-    mode = sys.argv[1] if len(sys.argv) > 1 else "soft"
+    mode = sys.argv[1] if len(sys.argv) > 1 else "hard"
     df = pd.read_parquet(FEATURE_TABLE_PATH)
     cls_bundle, reg_bundle = load_bundles()
     print(f"[평가] mode={mode}" + (f" (threshold={cls_bundle.get('threshold')})" if mode == "hard" else " (파이프라인 기준점, Prob x Quantity)"))

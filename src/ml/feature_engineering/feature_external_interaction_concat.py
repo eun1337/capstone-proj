@@ -44,14 +44,33 @@ Day2 산출물(data/ml/splits/*_feat.parquet, 5개: A_train/A_val/A_test/B_train
          전체 데이터에서 양성 발생이 0~2건뿐인 영분산(zero-variance) dead feature가 됨을
          확인. 대신 평균온도/총강수량을 그대로 연속형 feature로 남겨(트리 모델이 스스로
          비선형 임계점을 학습하도록) temp_x_precip(=평균온도*총강수량) 상호작용만 추가.
-    3) center_is_B / temp_x_precip: 통합 모델 1개가 센터별 차이를 반영하도록 하는 상호작용
-       feature. `qty_lag1 * center_is_B` 형태의 명시적 곱셈 상호작용은 의도적으로 생성하지
-       않음 — qty_lag1은 Base Model 핵심 공통 feature라 트리 모델(LightGBM)이 center 계열
-       feature와 조합해 스스로 상호작용을 학습할 수 있고, 인위적 곱 feature가 B센터(26주
-       학습 데이터로 상대적으로 적음)의 과적합 위험을 키울 수 있다고 판단했기 때문(Day4 ML
-       성능 검증에서 B 오차가 크게 나오면 그때 추가 실험 과제로 재검토). 기온_극단_flag가
-       폐기되면서 여기 의존하던 inter_center_temp_extreme도 함께 제거함 — 대신 평균온도*
-       총강수량의 연속형 상호작용(temp_x_precip)을 추가.
+    3) center_is_B / temp_x_precip / center_qty_lag1_inter / center_temp_inter: 통합 모델
+       1개가 센터별 차이를 반영하도록 하는 상호작용 feature.
+       `qty_lag1 * center_is_B`, `평균온도 * center_is_B` 형태의 명시적 곱셈 상호작용은
+       원래 의도적으로 생성하지 않았었음(qty_lag1은 Base Model 핵심 공통 feature라 트리
+       모델이 center 계열 feature와 조합해 스스로 상호작용을 학습할 수 있고, 인위적 곱
+       feature가 B센터의 과적합 위험을 키울 수 있다고 판단했었기 때문) — 단 "Day4 ML 성능
+       검증에서 B 오차가 크게 나오면 그때 재검토"라는 조건을 남겨뒀었고, 실제로 B 회귀
+       WAPE가 크게 나온 상태가 확인돼(재검토 조건 충족) center_interaction_ablation
+       실험(src/ml/experiments/center_interaction/)에서 재검증함.
+       Ablation 결과(2026-08-02, 팀 확정): center_qty_lag1_inter/center_temp_inter 2종
+       추가만으로 B WAPE가 개선되고 A WAPE는 무손실(부작용 없음) 확인 — 그래서 이 2개를
+       프로덕션에 정식 반영함.
+       Hard 모드 threshold 최종 확정=0.46(2026-08-02): 처음엔 SKU x 주 grain 기준
+       0.20~0.75 확장 재탐색으로 WAPE 최소 지점을 찾다가 threshold를 올릴수록 Bias가
+       -33%대까지 폭주하는 트레이드오프를 발견해 0.50으로 일단 고정했으나,
+       build_final_scorecard.py로 실제 재고/발주 집계 단위인 센터 x 주 Roll-up
+       grain(P4 체크리스트 공식 기준)에서 재평가한 결과 순위가 뒤집힘 — SKU x 주 grain은
+       SKU별 과다/과소 오차가 상쇄되지 않아 WAPE가 부풀려지는 착시가 있었고, Roll-up
+       기준으로는 th=0.50이 오히려 Baseline보다 B WAPE가 악화(18.03%→18.92%)되는 반면
+       th=0.46은 B WAPE를 18.03%→16.55%(-1.48%p)로 실개선하고 A Bias도 +0.57%로 거의
+       무편향이라 0.46을 최종 채택함(팀 확정, 재론 불필요. data/ml/experiments/
+       center_interaction_ablation/reports/final_scorecard.csv 및 ML_SCORECARD_SUMMARY.md 참고).
+       3번째 후보였던 `dayofweek * center_is_B`는 이 feature table이 주간(weekly) grain이라
+       week_st가 전 행에서 항상 월요일(dayofweek==0 고정)이라 상수 0 dead feature가 되어
+       팀 협의로 제외함.
+       기온_극단_flag가 폐기되면서 여기 의존하던 inter_center_temp_extreme도 함께
+       제거함 — 대신 평균온도*총강수량의 연속형 상호작용(temp_x_precip)을 추가.
     4) weeks_since_last_active_filled: Day2에서 만든 원본(datetime 파생, 미판매 행은 NaN)을
        SVM/신경망 등 NaN 미지원 모델용으로, 임의의 큰 값(999 등) 대신 관측 가능한
        최대 주수(156, 상수 MAX_WEEKS_SINCE_ACTIVE)로 capping하여 채움.
@@ -185,12 +204,15 @@ def add_covid_flag(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def add_interaction_features(df: pd.DataFrame) -> pd.DataFrame:
-    """qty_lag1 * center_is_B 형태의 명시적 곱셈 상호작용은 의도적으로 생성하지 않음
-    (모듈 docstring 4번 항목 참고 — 트리 모델 자체 학습에 맡기고, B 과적합 위험 회피).
-    temp_x_precip: 평균온도*총강수량 연속형 상호작용 — 기온_극단_flag(영분산이라 폐기)를
-    대체해 트리 모델이 스스로 비선형 임계점을 학습할 수 있도록 연속형 그대로 곱해서 제공."""
+    """temp_x_precip: 평균온도*총강수량 연속형 상호작용 — 기온_극단_flag(영분산이라 폐기)를
+    대체해 트리 모델이 스스로 비선형 임계점을 학습할 수 있도록 연속형 그대로 곱해서 제공.
+    center_qty_lag1_inter/center_temp_inter: center_qty_lag1_inter=qty_lag1*center_is_B,
+    center_temp_inter=평균온도*center_is_B. center_interaction_ablation 실험(2026-08-02)에서
+    B WAPE 개선(-4.6%p) + A 무손실을 확인해 정식 반영(모듈 docstring 3번 항목 참고)."""
     df["center_is_B"] = (df[CENTER_COL] == "B").astype(int)
     df["temp_x_precip"] = df["평균온도"] * df["총강수량"]
+    df["center_qty_lag1_inter"] = df["center_is_B"] * df["qty_lag1"]
+    df["center_temp_inter"] = df["center_is_B"] * df["평균온도"]
     return df
 
 
@@ -230,11 +252,20 @@ def run_sanity_checks(df: pd.DataFrame) -> None:
     print("[Sanity Check 2] 상호작용 / 외부변수 Feature 샘플 5행")
     sample_cols = [
         CENTER_COL, WEEK_COL, "center_is_B", "평균온도", "총강수량", "temp_x_precip",
+        "center_qty_lag1_inter", "center_temp_inter",
         "강수량_호우_flag", "강수량_호우_count",
         "공휴일_W-1", "공휴일_W0", "공휴일_W+1",
     ]
     print(df[sample_cols].sample(5, random_state=42).to_string(index=False))
-    print("  (참고: qty_lag1 * center_is_B 상호작용 및 기온_극단_flag/count(영분산으로 폐기)는 미생성)")
+    print("  (참고: 기온_극단_flag/count(영분산으로 폐기), dayofweek*center_is_B(weekly grain이라 상수 0)는 미생성)")
+
+    print()
+    print("=" * 80)
+    print("[Sanity Check 2b] 신규 center 상호작용 피처 결측치 비율(센터별) — 인위적 fill 없이 NaN 그대로 유지 확인")
+    for col in ["center_qty_lag1_inter", "center_temp_inter"]:
+        for center in df[CENTER_COL].cat.categories if hasattr(df[CENTER_COL], "cat") else df[CENTER_COL].unique():
+            na_ratio = df.loc[df[CENTER_COL] == center, col].isna().mean()
+            print(f"  {col} 센터 {center}: 결측치 비율={na_ratio:.2%}")
 
     print()
     print("=" * 80)
