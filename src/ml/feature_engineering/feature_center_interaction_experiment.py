@@ -10,10 +10,12 @@ ML 트랙 Feature Engineering 실험: center_id × 연속형/이진형 변수 �
 
 핵심 결정 (팀 협의 완료, 재론 불필요):
     1) center 상호작용을 만드는 대상은 qty_lag1(판매 관성)과 평균온도(기온 편차) 2종뿐이다.
-       공휴일_W0/W-1/W+1은 센터 구분 없이 원본 그대로 3개를 개별 피처로만 쓴다(center_is_B와
-       곱한 상호작용 컬럼을 만들지 않음 — 이미 0/1 이진값이라 center_is_B와의 곱이 정보량을
-       거의 더해주지 못한다는 판단, 팀 협의로 범위 축소함). 최초 스펙의 holiday_flag/
-       temp_anomaly는 실제 데이터에 없는 컬럼명이라 공휴일_W0(+W-1/W+1)/평균온도로 교체함.
+       공휴일 관련 컬럼(당시 공휴일_W0/W-1/W+1, 이후 horizon별 target_h{h}_공휴일_W0/W-1/W+1로
+       재설계됨 — feature_external_interaction_concat.py 참고)은 센터 구분 없이 원본 그대로
+       개별 피처로만 쓴다(center_is_B와 곱한 상호작용 컬럼을 만들지 않음 — 이미 0/1 이진값이라
+       center_is_B와의 곱이 정보량을 거의 더해주지 못한다는 판단, 팀 협의로 범위 축소함).
+       최초 스펙의 holiday_flag/temp_anomaly는 실제 데이터에 없는 컬럼명이라 공휴일 관련
+       컬럼/평균온도로 교체함.
     2) center 인코딩은 원본 center_id(문자열/category)가 아니라 기존 파이프라인이 이미
        쓰는 center_is_B(0/1 수치형)를 재사용 — 새로 정의하지 않고 그대로 곱셈에 사용.
     3) 상호작용 생성 방식은 문자열 결합이 아니라 수치형 곱셈(center_is_B * 변수) —
@@ -47,9 +49,13 @@ OUT_DIR = BASE_DIR / "data" / "ml" / "feature_engineering_experiment"
 OUT_PATH = OUT_DIR / "feature_table_with_center_interactions.parquet"
 
 CENTER_COL = "center_id"
-# 공휴일_W0/W-1/W+1은 상호작용 없이 원본 그대로 쓰는 참고용 컬럼이라 상호작용 대상에서 뺌.
+# target_h{h}_공휴일_W0/W-1/W+1은 상호작용 없이 원본 그대로 쓰는 참고용 컬럼이라 상호작용
+# 대상에서 뺌 (구 origin 주 기준 공휴일_W0/W-1/W+1은 horizon별 target 주 기준으로 재설계되며
+# 폐기됨 — feature_external_interaction_concat.py 참고).
 INTERACTION_BASE_COLS = ["qty_lag1", "평균온도"]
-HOLIDAY_COLS = ["공휴일_W0", "공휴일_W-1", "공휴일_W+1"]
+HOLIDAY_COLS = [
+    f"target_h{h}_공휴일_{w}" for h in (1, 2, 4) for w in ("W0", "W-1", "W+1")
+]
 NEW_INTERACTION_COLS = ["center_qty_lag1_inter", "center_temp_inter"]
 
 

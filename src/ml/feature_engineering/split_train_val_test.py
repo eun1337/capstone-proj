@@ -1,7 +1,9 @@
 """
 split_train_val_test.py
 
-설명: A/B센터 주간 수요 데이터를 Train/Val/Test로 분할하고 horizon 타겟(target_h1/4/8)을 생성합니다.
+설명: A/B센터 주간 수요 데이터를 Train/Val/Test로 분할하고 horizon 타겟을 생성합니다.
+    A_HORIZONS=[1,2,4,8], B_HORIZONS=[1,2,4] (h2는 target_h*_공휴일_W0/-1/+1 horizon별
+    피처 도입을 위해 추가됨 — feature_external_interaction_concat.py 참고).
     파일 위치: src/ml/feature_engineering/split_train_val_test.py (BASE_DIR=parents[3])
 
 산출물 (data/ml/splits/):
@@ -43,6 +45,22 @@ FILE_A = DATA_DIR / "master_demand_weekly_A.parquet"
 FILE_B = DATA_DIR / "master_demand_weekly_B_with_regime.parquet"
 FILE_PURCHASE = DATA_DIR / "cleaned_purchase_cleaned_for_pred.parquet"
 
+# Weather Region Assignment 재구현 산출물(analysis-results/preprocessing/
+# weather_region_assignment.py, dev-data-preprocessing 브랜치)을 SKU-week 단위로 병합한다.
+# 기존 CALENDAR_MEAN_COLS의 평균온도/총강수량(센터-week 단일값을 모든 SKU에 broadcast,
+# 총강수량 거래건수만큼 중복 합산 버그 있었음)을 완전히 대체 — 아래 CALENDAR_MEAN_COLS에서
+# 두 컬럼 제거하고 이 파일에서만 공급한다.
+WEATHER_SKU_WEEK_FILES = {
+    "A": DATA_DIR / "weather_sku_week_A.parquet",
+    "B": DATA_DIR / "weather_sku_week_B.parquet",
+}
+WEATHER_SKU_WEEK_RAW_SKU_COLS = ["바코드", "옵션코드", "상품클러스터"]
+# region_rule/n_regions/fallback_weeks_back/is_missing/weather_day_count: 진단용 —
+# 최종 테이블엔 유지하되 학습 피처에서는 feature_lag_rolling_calendar.py의
+# get_excluded_cols()(WEATHER_REGION_DIAGNOSTIC_COLS)에서 명시적으로 제외한다.
+WEATHER_SKU_WEEK_VALUE_COLS = ["평균온도", "총강수량"]
+WEATHER_SKU_WEEK_DIAGNOSTIC_COLS = ["region_rule", "n_regions", "fallback_weeks_back", "is_missing", "weather_day_count"]
+
 RAW_WEEK_COL = "주시작일"
 RAW_SKU_PARTS = ["바코드", "옵션코드", "상품클러스터"]
 RAW_CENTER_COL = "센터"
@@ -60,7 +78,11 @@ QTY_COL = "qty"
 SKU_SEP = "*"
 
 SUM_COLS = ["총판매수량", "반품수량"]
-CALENDAR_MEAN_COLS = ["평균온도", "총강수량", "cpi", "경상지수", "불변지수"]
+# 평균온도/총강수량은 더 이상 여기서 공급하지 않음(위 WEATHER_SKU_WEEK_FILES 참고) —
+# 센터-week 단일값을 모든 SKU에 그대로 broadcast하던 방식은 SKU가 실제로 어느 지역에서
+# 팔렸는지 반영하지 못했고, 총강수량은 거래 라인 수만큼 중복 합산되는 버그가 있었음
+# (사전 조사에서 최대 99배, 데이터셋 전체 평균 1.46배 과대평가 확인됨).
+CALENDAR_MEAN_COLS = ["cpi", "경상지수", "불변지수"]
 CALENDAR_MAX_COLS = ["공휴일"]
 CALENDAR_FIRST_COLS = ["ISO_연도", "ISO_주차", "covid_영향여부"]
 
@@ -72,13 +94,13 @@ A_VAL_START = "2024-01-01"
 A_VAL_END = "2024-06-30"
 A_TEST_START = "2024-07-01"
 A_TEST_END = "2024-12-31"
-A_HORIZONS = [1, 4, 8]
+A_HORIZONS = [1, 2, 4, 8]
 
 B_TRAIN_START = "2023-07-01"
 B_TRAIN_END = "2023-12-31"
 B_WF_POOL_START = "2024-01-01"
 B_WF_POOL_END = "2024-12-31"
-B_HORIZONS = [1, 4]
+B_HORIZONS = [1, 2, 4]
 
 B_WF_VAL_WEEKS = 1
 B_WF_STEP_WEEKS = 1
@@ -117,6 +139,27 @@ def build_calendar_features(raw_df: pd.DataFrame) -> pd.DataFrame:
     agg_map.update({c: "first" for c in CALENDAR_FIRST_COLS if c in raw_df.columns})
     cal = raw_df.groupby(RAW_WEEK_COL, as_index=False).agg(agg_map)
     return cal.rename(columns={RAW_WEEK_COL: WEEK_COL})
+
+
+def load_sku_week_weather(center_label: str) -> pd.DataFrame:
+    """Weather Region Assignment 산출물(SKU-week grain)을 로드해 이 파일의 키 형식
+    (center_id/sku_id/week_st)으로 맞춘다. sku_id는 aggregate_region_to_sku()와 동일한
+    바코드+SEP+옵션코드+SEP+상품클러스터 조합 방식을 그대로 재현해야 병합 키가 맞는다
+    (실측 검증: A는 2,248,073건 완전 1:1 일치, B는 다운스트림 grid의 600,032건이 전부
+    이 테이블에 포함됨을 확인함 — B는 레짐 이전 구간까지 포함한 더 넓은 테이블이라
+    반드시 이 함수의 결과가 아니라 build_center_df()의 reindexed 쪽을 driving table로
+    LEFT JOIN해야 레짐 이전 초과분이 자동으로 걸러진다).
+    """
+    path = WEATHER_SKU_WEEK_FILES[center_label]
+    df = pd.read_parquet(path)
+    df[SKU_COL] = (
+        df[WEATHER_SKU_WEEK_RAW_SKU_COLS[0]].astype(str) + SKU_SEP +
+        df[WEATHER_SKU_WEEK_RAW_SKU_COLS[1]].astype(str) + SKU_SEP +
+        df[WEATHER_SKU_WEEK_RAW_SKU_COLS[2]].astype(str)
+    )
+    df = df.rename(columns={"센터": CENTER_COL, "주시작일": WEEK_COL})
+    keep = [CENTER_COL, SKU_COL, WEEK_COL] + WEATHER_SKU_WEEK_VALUE_COLS + WEATHER_SKU_WEEK_DIAGNOSTIC_COLS
+    return df[keep]
 
 
 def aggregate_region_to_sku(raw_df: pd.DataFrame) -> pd.DataFrame:
@@ -272,6 +315,17 @@ def build_center_df(path: Path, horizons: list[int], first_stock_map: pd.DataFra
     print(f"  reindex(연속 주간 그리드): {len(agg):,}행(관측) -> {len(reindexed):,}행(전체 그리드)")
 
     reindexed = reindexed.merge(calendar, on=WEEK_COL, how="left")
+
+    # Weather Region Assignment 병합 — reindexed(다운스트림 grid, 레짐 필터가 이미
+    # 반영된 상태)를 항상 driving table로 두는 LEFT JOIN. weather_sku_week_B는 레짐
+    # 이전 구간까지 포함한 더 넓은 테이블이지만, 이 방향의 LEFT JOIN이라 reindexed에
+    # 없는 레짐 이전 초과행은 자동으로 버려지고 결측도 발생하지 않는다(실측 검증 완료).
+    sku_week_weather = load_sku_week_weather(center_label)
+    reindexed = reindexed.merge(sku_week_weather, on=[CENTER_COL, SKU_COL, WEEK_COL], how="left")
+    n_missing_weather = reindexed["평균온도"].isna().sum()
+    print(f"  SKU-week 날씨 병합(Weather Region Assignment): 평균온도 결측 {n_missing_weather:,}건 "
+          f"({'정상' if n_missing_weather == 0 else '⚠ 확인 필요'})")
+
     reindexed["existed_before_regime"] = reindexed[SKU_COL].isin(pre_regime_skus)
     if pre_regime_skus:
         n_veteran = reindexed.loc[reindexed["existed_before_regime"], SKU_COL].nunique()

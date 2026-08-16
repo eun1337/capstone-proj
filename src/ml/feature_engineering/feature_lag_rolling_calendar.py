@@ -49,6 +49,7 @@ lag, rolling, 캘린더 feature를 한 번에 계산한 뒤, 원래 분할 기�
 """
 
 from pathlib import Path
+import re
 
 import numpy as np
 import pandas as pd
@@ -377,12 +378,28 @@ NEEDS_TRANSFORM_COLS = ["sku_last_active_week"]
 # 학습 스크립트(Base 통합/센터별 분리/Tweedie)에 동일하게 적용되도록 한다.
 HIGH_CARDINALITY_TEXT_COLS = ["상품명", "규격"]
 
+# Weather Region Assignment(split_train_val_test.py의 load_sku_week_weather()) 병합으로
+# 추가된 판정 근거 컬럼. 최종 테이블엔 유지해서 디버깅/필터링에 쓰되(예: weather_day_count
+# 로 주 경계 커버리지 부족 행 제외, is_missing으로 결측 행 제외), 값 자체가 라벨 정보에
+# 가까워(예: region_rule은 사실상 "이 주에 판매가 있었는지"를 그대로 노출) 학습 피처로는
+# 부적절하므로 명시적으로 제외한다. DIAGNOSTIC_COL_SUFFIXES(_fill_source 접미사)로는
+# 안 걸러지는 컬럼명이라 별도 리스트로 추가함.
+WEATHER_REGION_DIAGNOSTIC_COLS = ["region_rule", "n_regions", "fallback_weeks_back", "is_missing", "weather_day_count"]
+
+
+TARGET_LABEL_PATTERN = re.compile(r"^target_h\d+(_flag|_qty_log1p)?$")
+
 
 def get_excluded_cols(df: pd.DataFrame) -> list[str]:
-    target_cols = [c for c in df.columns if c.startswith("target_")]
+    """라벨 컬럼은 정확히 target_h{h}/target_h{h}_flag/target_h{h}_qty_log1p 3종 패턴만
+    매칭한다(단순 startswith("target_")를 쓰면 target_h1_공휴일_W0 같은 horizon별 feature도
+    라벨로 오인해 걸러버리는 충돌이 생김 — feature_external_interaction_concat.py의
+    add_holiday_calendar_features() 도입 후 확인된 문제, 재론 불필요)."""
+    target_cols = [c for c in df.columns if TARGET_LABEL_PATTERN.match(c)]
     diagnostic_cols = [c for c in df.columns if c.endswith(DIAGNOSTIC_COL_SUFFIXES)]
     high_card_cols = [c for c in HIGH_CARDINALITY_TEXT_COLS if c in df.columns]
-    return ID_COLS + target_cols + diagnostic_cols + NEEDS_TRANSFORM_COLS + high_card_cols
+    weather_diagnostic_cols = [c for c in WEATHER_REGION_DIAGNOSTIC_COLS if c in df.columns]
+    return ID_COLS + target_cols + diagnostic_cols + NEEDS_TRANSFORM_COLS + high_card_cols + weather_diagnostic_cols
 
 
 if __name__ == "__main__":

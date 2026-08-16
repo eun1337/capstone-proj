@@ -6,8 +6,8 @@ Day2 산출물(data/ml/splits/*_feat.parquet, 5개: A_train/A_val/A_test/B_train
 읽어 하나로 합친 뒤, 아래를 추가하고 단일 parquet(feature_table_final.parquet)으로 저장한다.
 
 핵심 설계:
-    1) 공휴일_W0/W-1/W+1: 예전엔 (center_id, week_st) 단위로 거래 데이터에 조인된 원본
-       `공휴일`(설날/추석 여부, 해당 날짜에 실제 매출/출고 거래가 있어야만 값이 매겨짐)을
+    1) target_h{h}_공휴일_W0/W-1/W+1: 예전엔 (center_id, week_st) 단위로 거래 데이터에 조인된
+       원본 `공휴일`(설날/추석 여부, 해당 날짜에 실제 매출/출고 거래가 있어야만 값이 매겨짐)을
        그대로 shift해서 D0/D-1/D+1을 만들었는데, **B센터는 명절 당일 전후로 출고 거래
        자체를 거의 기록하지 않아 B 전체(train+pool 60만 행)에서 이 컬럼이 단 한 번도
        1인 적이 없는 구조적 결함이 있었음**(실측 확인 — sql/join/master_join.sql의
@@ -15,11 +15,17 @@ Day2 산출물(data/ml/splits/*_feat.parquet, 5개: A_train/A_val/A_test/B_train
        B는 매칭할 거래 행 자체가 없어서 발생한 문제. `B센터_명절휴무`라는 B 전용 하드코딩
        패치가 있었던 이유이기도 함). 그래서 **거래 유무와 완전히 무관한 순수 캘린더 기준**
        (KOREAN_LUNAR_HOLIDAYS, 공식 설날/추석 연휴+대체공휴일/임시공휴일 날짜를 A(2021~)/
-       B(2023~) 관측 범위 전체에 대해 하드코딩)으로 재설계해 A/B 공통 단일 변수 3개로
-       통합했다. W0=이번 주가 명절 포함 주, W-1=다음 주가 명절 포함 주(LEAD),
-       W+1=지난 주가 명절 포함 주(LAG) — 팀 확정 정의(숫자 부호와 시제가 반대인 비통상적
-       관례이니 주의). 거래-조인 기반 원본 `공휴일`/`공휴일_D0/D-1/D+1`/`B센터_명절휴무`는
-       전부 제거하고 이 3개로 완전히 대체함.
+       B(2023~) 관측 범위 전체에 대해 하드코딩)으로 재설계해 A/B 공통 단일 변수로 통합했다.
+       최초 버전은 origin 주(week_st) 기준 W0(이번 주)/W-1(다음 주, LEAD)/W+1(지난 주, LAG)
+       3개뿐이었는데, 이 정의가 유효한 건 사실상 h1 target(target_date=week_st+1주)뿐이라
+       (W-1이 정확히 h1 target 주와 일치) h2/h4/h8 target 주의 명절 여부는 전혀 반영하지
+       못하는 한계가 있었음(팀 확인 후 재설계 결정, 재론 불필요). 그래서 horizon별로
+       target_date(=week_st+h주)를 기준점으로 삼아 W0(target 주 자체)/W-1(target 주 이전
+       1주)/W+1(target 주 다음 1주)를 **표준 부호**(옛 버전과 반대 — 더 이상 LEAD/LAG 아님)로
+       재정의하고, HOLIDAY_TARGET_HORIZONS=[1, 2, 4] 각각에 대해 생성한다(h8은 대상 아님,
+       팀 확정). 거래-조인 기반 원본 `공휴일`/`공휴일_D0/D-1/D+1`/`B센터_명절휴무`뿐 아니라
+       옛 origin 주 기준 `공휴일_W0/W-1/W+1`도 전부 제거하고 이 9개(3horizon×3window)로
+       완전히 대체함.
     2) 강수량_호우_flag/count: 주 단위로 미리 집계된 총강수량에서 분위수를 구하면 주간
        평탄화로 특정 하루의 극단 이벤트가 상쇄되어 묻히므로, 반드시 일별(raw) 원본 기후
        데이터에서 먼저 하루 단위로 극단 여부를 판정한 뒤 주 단위로 집계(count/flag)한다.
@@ -86,7 +92,7 @@ import sys
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from feature_lag_rolling_calendar import get_excluded_cols
+from feature_lag_rolling_calendar import get_excluded_cols, TARGET_LABEL_PATTERN
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 SPLIT_DIR = BASE_DIR / "data" / "ml" / "splits"
@@ -140,20 +146,30 @@ def load_all_feat() -> pd.DataFrame:
     return pd.concat(frames, ignore_index=True)
 
 
-def add_holiday_calendar_features(df: pd.DataFrame) -> pd.DataFrame:
-    """공휴일_W0/W-1/W+1: 거래 유무와 무관한 순수 캘린더(설날/추석) 기준 A/B 공통 단일 변수.
-    옛 거래-조인 방식(공휴일_D0)은 B가 명절 당일 출고를 거의 기록하지 않아 B 전체가 항상
-    0이 되는 구조적 결함이 있었음(모듈 docstring 1번 참고). KOREAN_LUNAR_HOLIDAYS의 각 날짜를
-    그 날짜가 속한 주(week_st, 월요일)로 변환해 "명절이 포함된 주" 집합을 만들고, 이 집합에
+HOLIDAY_TARGET_HORIZONS = [1, 2, 4]
+
+
+def add_holiday_calendar_features(
+    df: pd.DataFrame, horizons: list[int] = HOLIDAY_TARGET_HORIZONS
+) -> pd.DataFrame:
+    """target_h{h}_공휴일_W0/W-1/W+1: 거래 유무와 무관한 순수 캘린더(설날/추석) 기준 A/B 공통
+    단일 변수. 옛 거래-조인 방식(공휴일_D0)은 B가 명절 당일 출고를 거의 기록하지 않아 B 전체가
+    항상 0이 되는 구조적 결함이 있었음(모듈 docstring 1번 참고). KOREAN_LUNAR_HOLIDAYS의 각
+    날짜를 그 날짜가 속한 주(월요일)로 변환해 "명절이 포함된 주" 집합을 만들고, 이 집합에
     대한 소속 여부만으로 판정하므로 어떤 거래 기록도 필요 없다.
-    W0=이번 주, W-1=다음 주(LEAD), W+1=지난 주(LAG) — 팀 확정 정의."""
+    각 horizon h에 대해 target_date = week_st + h주를 기준점으로 삼는다(옛 origin 주 기준
+    버전은 h1 target 주만 우연히 커버했고 h2/h4는 전혀 못 봤음 — 모듈 docstring 1번 참고).
+    W0=target 주 자체, W-1=target 주 바로 이전 1주, W+1=target 주 바로 다음 1주 — 표준 부호
+    (target_date 기준 -1주/+1주 그대로, LEAD/LAG 아님)."""
     holiday_dates = pd.Series(KOREAN_LUNAR_HOLIDAYS)
     holiday_week_starts = holiday_dates - pd.to_timedelta(holiday_dates.dt.weekday, unit="D")
     holiday_weeks = set(holiday_week_starts)
 
-    df["공휴일_W0"] = df[WEEK_COL].isin(holiday_weeks).astype(int)
-    df["공휴일_W-1"] = (df[WEEK_COL] + pd.Timedelta(weeks=1)).isin(holiday_weeks).astype(int)
-    df["공휴일_W+1"] = (df[WEEK_COL] - pd.Timedelta(weeks=1)).isin(holiday_weeks).astype(int)
+    for h in horizons:
+        target_date = df[WEEK_COL] + pd.Timedelta(weeks=h)
+        df[f"target_h{h}_공휴일_W0"] = target_date.isin(holiday_weeks).astype(int)
+        df[f"target_h{h}_공휴일_W-1"] = (target_date - pd.Timedelta(weeks=1)).isin(holiday_weeks).astype(int)
+        df[f"target_h{h}_공휴일_W+1"] = (target_date + pd.Timedelta(weeks=1)).isin(holiday_weeks).astype(int)
     return df
 
 
@@ -254,8 +270,7 @@ def run_sanity_checks(df: pd.DataFrame) -> None:
         CENTER_COL, WEEK_COL, "center_is_B", "평균온도", "총강수량", "temp_x_precip",
         "center_qty_lag1_inter", "center_temp_inter",
         "강수량_호우_flag", "강수량_호우_count",
-        "공휴일_W-1", "공휴일_W0", "공휴일_W+1",
-    ]
+    ] + [f"target_h{h}_공휴일_{w}" for h in HOLIDAY_TARGET_HORIZONS for w in ("W-1", "W0", "W+1")]
     print(df[sample_cols].sample(5, random_state=42).to_string(index=False))
     print("  (참고: 기온_극단_flag/count(영분산으로 폐기), dayofweek*center_is_B(weekly grain이라 상수 0)는 미생성)")
 
@@ -296,15 +311,18 @@ def run_sanity_checks(df: pd.DataFrame) -> None:
     print("=" * 80)
     print("[Sanity Check 5] target_* / get_excluded_cols() 정합성")
     excluded = get_excluded_cols(df)
-    target_cols = [c for c in df.columns if c.startswith("target_")]
+    # 진짜 라벨(target_h{h}/target_h{h}_flag/target_h{h}_qty_log1p)만 매칭 — 단순
+    # startswith("target_")를 쓰면 target_h1_공휴일_W0 같은 horizon별 feature도 라벨로
+    # 오인해 여기 진단이 "빠짐"/"leaked"로 오탐한다(get_excluded_cols()와 동일 패턴 사용).
+    target_cols = [c for c in df.columns if TARGET_LABEL_PATTERN.match(c)]
     missing_targets = [c for c in target_cols if c not in excluded]
     feature_cols = [c for c in df.columns if c not in excluded and c != "split"]
-    print(f"  target_* 컬럼({len(target_cols)}개): {target_cols}")
+    print(f"  target_* 라벨 컬럼({len(target_cols)}개): {target_cols}")
     print(f"  get_excluded_cols() 제외 목록({len(excluded)}개): {excluded}")
     print(f"  제외 목록에서 빠진 target 컬럼: {missing_targets if missing_targets else '없음 (전부 포함됨)'}")
     print(f"  최종 feature_cols 후보 개수(참고용, split 제외): {len(feature_cols)}개")
-    leaked_in_features = [c for c in feature_cols if c.startswith("target_")]
-    print(f"  feature_cols에 target_ 섞여 들어간 것: {leaked_in_features if leaked_in_features else '없음'}")
+    leaked_in_features = [c for c in feature_cols if TARGET_LABEL_PATTERN.match(c)]
+    print(f"  feature_cols에 target 라벨 섞여 들어간 것: {leaked_in_features if leaked_in_features else '없음'}")
 
     print()
     print("=" * 80)

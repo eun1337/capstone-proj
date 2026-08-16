@@ -9,7 +9,7 @@ python run_b_only_experiment.py
 핵심 설계:
     1) A 데이터는 로드조차 하지 않는다(cv_common.load_a_full 호출 없음) — 완전 배제.
     2) 학습 데이터: B_full_feat.parquet(2020-12-28~2023-12-31 구간 전체, pre 레짐
-       포함 — 앞선 Option3 CV 실험에서 사용자가 승인한 것과 동일하게 "B 본연의
+       포함 — 앞선 Option3 CV 실험에서 동일하게 "B 본연의
        데이터 전부"를 쓴다). 2024년은 다른 실험과 동일하게 순수 holdout으로 격리.
     3) 조기종료(early-stopping) val은 학습 구간 마지막 4주를 내부 분리
        (cv_common.carve_internal_es_val, 기존 B_INTERNAL_VAL_WEEKS 관례).

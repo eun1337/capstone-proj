@@ -4,8 +4,8 @@ Option3(A+B Pooling + 24개월 Rolling Window CV) 전용 B센터 전체이력 fe
 
 기존 프로덕션 파이프라인(split_train_val_test.py)은 B의 `pre` 레짐(2023-07 이전,
 데이터 품질 이슈로 팀이 제외 결정)을 학습 대상에서 뺀다. 하지만 이 CV 실험의
-Option3 Fold1 Val(2023-01~06)은 그 pre 레짐 구간과 겹치고, 사용자가 "pre 레짐
-포함해서 원안 그대로" 진행하기로 확정했다(plan 문서 참고).
+Option3 Fold1 Val(2023-01~06)은 그 pre 레짐 구간과 겹치고, "pre 레짐
+포함해서 원안 그대로" 진행하기로 확정(plan 문서 참고).
 
 master_demand_weekly_B_with_regime.parquet의 pre(2020-12-28~2023-06-26)/
 post(2023-07-03~2024-12-30) 레짐은 실제로는 공백 없이 이어지는 연속 주간

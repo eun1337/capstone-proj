@@ -124,7 +124,7 @@ ERROR_KEYWORDS: list[str] = [
 ERROR_EXACT: set[str] = {"nan", "none", "null", "n/a", "-", "", "error", "na"}
 
 # ── 색상 코드 (openpyxl: '#' 없이 6자리 HEX) ─────────────────────────
-C_WRONG   = "FF89BF"   # ★ 오답 마킹 (#ff89bf, 사용자 지정)
+C_WRONG   = "FF89BF"   # ★ 오답 마킹 (#ff89bf)
 C_SKIP    = "D9D9D9"   # 에러 패스 셀 (연회색)
 C_HEADER  = "2F5496"   # 일반 헤더 (남색)
 C_ANS_HD  = "1F7391"   # 정답 컬럼 헤더 (청록)
