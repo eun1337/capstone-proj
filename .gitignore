@@ -10,12 +10,13 @@ node_modules/
 *.env
 .env
 
-# analysis-results 산출물(차트/이미지)은 실데이터를 노출하므로 비공개 - 코드(.py)만 추적
-# (csv/xlsx는 위 전역 규칙으로 이미 제외됨)
-analysis-results/**/*.png
+# analysis-results 산출물(차트/이미지 등)은 실데이터를 노출하므로 비공개 - 코드(.py)만 추적
+# (csv/xlsx/parquet는 위 전역 규칙으로 이미 제외됨, png 등 나머지 확장자는 아래 규칙으로 제외)
+analysis-results/**
+!analysis-results/**/
+!analysis-results/**/*.py
 
 reports/
 *.parquet
 output.txt
 *.session.sql
-analysis-results/
