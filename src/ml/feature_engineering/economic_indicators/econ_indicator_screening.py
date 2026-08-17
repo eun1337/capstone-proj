@@ -47,6 +47,9 @@ FEATURE_SPECS = [
 
 RNG_SEED = 42
 
+# 2024 Final Holdout 기간의 경제지표가 screening 통계에 들어가지 않도록 상한을 둠.
+SERIES_CUTOFF_YM = (2023, 12)
+
 
 def shift_year_month(year: int, month: int, offset: int) -> tuple[int, int]:
     total = year * 12 + (month - 1) + offset
@@ -105,7 +108,7 @@ def build_candidates() -> pd.DataFrame:
     print(f"  train 행수: {len(df):,}  (A/B 센터: {sorted(df[CENTER_COL].unique())})")
 
     print("[2/3] 센터x주 Roll-up 타겟(qty 합계) 집계 (P4 공식과 동일: groupby(center,week).sum())")
-    target = df.groupby([CENTER_COL, WEEK_COL], as_index=False)[QTY_COL].sum()
+    target = df.groupby([CENTER_COL, WEEK_COL], as_index=False, observed=True)[QTY_COL].sum()
     target = target.rename(columns={QTY_COL: "qty_rollup"})
     target["year"] = target[WEEK_COL].dt.year
     target["month"] = target[WEEK_COL].dt.month
@@ -114,6 +117,8 @@ def build_candidates() -> pd.DataFrame:
     print("[3/3] CPI/소비자심리지수 로드 및 20개 후보 피처 생성 (원본/선형detrend잔차/YoY 3버전)")
     cpi_raw = load_monthly_series(CPI_PATH, "소비자물가지수")
     ccsi_raw = load_monthly_series(CCSI_PATH, "소비자심리지수")
+    cpi_raw = cpi_raw[[ym <= SERIES_CUTOFF_YM for ym in cpi_raw.index]]
+    ccsi_raw = ccsi_raw[[ym <= SERIES_CUTOFF_YM for ym in ccsi_raw.index]]
 
     year_months = target[["year", "month"]].drop_duplicates().reset_index(drop=True)
 
