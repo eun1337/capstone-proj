@@ -39,8 +39,16 @@ WEEK_COL = "week_st"
 # 그 컬럼은 sold_flag==1인 행만 값이 있고 진짜 0(판매 안 됨, train의 73%)을 전부 NaN
 # 처리해둔 다른 용도의 컬럼이라, 그대로 회귀 타겟으로 쓰면 "수요 0인 주"가 통째로
 # 학습에서 빠지는 심각한 편향이 생긴다. log1p 변환은 여기서 target_h1에 직접 적용한다
-# (log1p(0)=0이라 진짜 0도 정상적으로 포함됨).
+# (log1p(0)=0이라 진짜 0도 정상적으로 포함됨). target_h2/h4_qty_log1p도 동일한 이유로
+# 사용 금지(Day1 Step1 audit, 2026-08-17 확정) — 향후 h2/h4 non-Hurdle 타겟이 필요해도
+# 아래 LEGACY_LOG_TARGET_COLS 중 하나를 그대로 갖다 쓰지 말고 np.log1p(target_h{h})를
+# 그 자리에서 계산할 것. 컬럼 자체는 과거 실험 재현성을 위해 삭제하지 않고 보존한다.
+LEGACY_LOG_TARGET_COLS = ["target_h1_qty_log1p", "target_h2_qty_log1p", "target_h4_qty_log1p"]
 TARGET_COL = "target_h1"
+assert TARGET_COL not in LEGACY_LOG_TARGET_COLS, (
+    f"{TARGET_COL}은 legacy Hurdle 조건부회귀 전용 컬럼(raw==0 -> NaN)이라 "
+    "final non-Hurdle 회귀 타겟으로 쓸 수 없음 - raw target에서 np.log1p()를 runtime에 계산할 것."
+)
 
 BASE_CLS_MODEL_PATH = MODEL_DIR / "base_model_cls.pkl"
 BASE_MODEL_PATH = MODEL_DIR / "base_model_reg.pkl"
