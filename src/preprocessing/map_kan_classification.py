@@ -69,6 +69,11 @@ def load_mapping(path: Path) -> pd.DataFrame:
     df[MAP_BARCODE]  = df[MAP_BARCODE].str.strip()
     df[MAP_NAME]     = df[MAP_NAME].str.strip()
     df[MAP_KAN_CODE] = pad_kan_code(df[MAP_KAN_CODE])
+    # 원본 매핑 엑셀(data/master/ab_final_product_master.xlsx)의 KAN_중분류/소분류
+    # 값 자체에 입력 실수로 앞공백이 섞여 있어(예: " 의료기기" vs "의료기기") strip 없이
+    # 그대로 통과시키면 같은 카테고리가 공백 유무로 서로 다른 값으로 갈라짐 — 여기서 제거.
+    for col in [MAP_KAN_L, MAP_KAN_M, MAP_KAN_S]:
+        df[col] = df[col].str.strip()
     df = df.drop_duplicates(subset=[MAP_BARCODE, MAP_NAME], keep="first")
     df = df[[MAP_BARCODE, MAP_NAME, MAP_KAN_CODE, MAP_KAN_L, MAP_KAN_M, MAP_KAN_S]].rename(columns={
         MAP_KAN_CODE: OUT_KAN_CODE,
