@@ -5,7 +5,7 @@ Informer 1차 compute benchmark worker. 실제 production informer/trainer.train
 encoder-decoder tensor 생성/model fit/checkpoint/predict/inverse transform 전부 production
 경로) P10 A센터 전체 h1 Fold1 규모에서 런타임/RAM/device memory만 측정한다.
 
-대표 configuration: 사용자가 지정한 그대로 e_layers=2, n_heads=8, lookback=13(모두
+대표 configuration: e_layers=2, n_heads=8, lookback=13(모두
 config.py의 SMOKE_* 값과 동일). batch_size(32)/learning_rate(1e-4)는 HPO 축이 아닌 fixed
 값 그대로. max_epochs도 smoke용 값이 아니라 실제 fixed 값(8)을 그대로 쓴다.
 """
@@ -71,7 +71,7 @@ def main() -> None:
         "device_memory_metric": result["device_memory_metric"],
         "status": "completed",
         "metrics_not_used_for_decision": result["metrics"],
-        "notes": "e_layers/n_heads/lookback은 사용자가 지정한 config.py SMOKE_* 값(성능 기반 선택 아님). batch_size/learning_rate는 HPO 축이 아닌 fixed 값. max_epochs는 실제 fixed 값(8) 그대로 사용",
+        "notes": "e_layers/n_heads/lookback은 확정한 config.py SMOKE_* 값(성능 기반 선택 아님). batch_size/learning_rate는 HPO 축이 아닌 fixed 값. max_epochs는 실제 fixed 값(8) 그대로 사용",
     }
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)

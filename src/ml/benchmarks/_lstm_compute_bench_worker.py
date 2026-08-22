@@ -4,8 +4,7 @@ LSTM Search Space 내부 실제 reference config로 1차 compute benchmark를 �
 worker. 이전 _lstm_bench_worker.py는 hidden_size=16/batch_size=32(SMOKE_* 값)를
 써서 실제 확정 HPO Search Space(hidden_size={32,48,64,96,128,256},
 batch_size={64,128,256,512,1024}, learning_rate=log 1e-6~1e-3,
-weight_decay=log 1e-4~8e-4, lookback={13,26}) 밖의 값이었음이 확인되어, 사용자가
-확정한 Search Space 내부 reference(hidden_size=96, batch_size=256, lookback=13,
+weight_decay=log 1e-4~8e-4, lookback={13,26}) 밖의 값이었음이 확인되어, 확정한 Search Space 내부 reference(hidden_size=96, batch_size=256, lookback=13,
 learning_rate=1e-3, weight_decay=1e-4)로 다시 측정한다. 실제 production
 lstm/trainer.train_and_evaluate_fold를 그대로 호출한다(fold generator/target_date
 purge/train-only preprocessing/structural NaN/sequence build/model fit/checkpoint/
@@ -22,7 +21,7 @@ from src.ml.day3_rf_lightgbm.common.data_loader import load_development
 from src.ml.day4_lstm_tft_informer.lstm.config import MAX_EPOCHS
 from src.ml.day4_lstm_tft_informer.lstm.trainer import train_and_evaluate_fold
 
-# 사용자가 확정한 Search Space 내부 reference config
+# 확정한 Search Space 내부 reference config
 LOOKBACK = 13
 HIDDEN_SIZE = 96
 BATCH_SIZE = 256
@@ -72,7 +71,7 @@ def main() -> None:
         "device_memory_metric": result["device_memory_metric"],
         "status": "completed",
         "metrics_not_used_for_decision": result["metrics"],
-        "notes": "hidden_size/batch_size/learning_rate/weight_decay/lookback은 사용자가 확정한 실제 Search Space 내부 reference. max_epochs는 실제 fixed 값(20) 그대로 사용",
+        "notes": "hidden_size/batch_size/learning_rate/weight_decay/lookback은 확정한 실제 Search Space 내부 reference. max_epochs는 실제 fixed 값(20) 그대로 사용",
     }
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)

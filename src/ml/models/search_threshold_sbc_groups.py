@@ -1,6 +1,6 @@
 """
 search_threshold_sbc_groups.py
-SBC(ADI축) 2그룹별 threshold 분리 탐색 (통합 모델, 협업자 제안 조정판)
+SBC(ADI축) 2그룹별 threshold 분리 탐색 (통합 모델)
 
 원 제안은 "A/B Validation을 물동량 기준으로 합쳐서" 그룹당 1개 threshold(총 2개)를
 찾자는 것이었으나, 다음 두 가지 문제로 조정함:
