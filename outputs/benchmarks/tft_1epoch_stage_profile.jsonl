@@ -1,0 +1,11 @@
+{"stage": "data_load", "elapsed_sec": 1.2032139590010047, "cumulative_peak_ram_mb": 2778.0625, "device_memory_mb": 0.0, "device_memory_metric": "mps_current_allocated_memory_mb", "n_train_rows": 356271, "n_val_rows": 117607}
+{"stage": "structural_nan_fit_apply", "elapsed_sec": 1.0191946669947356, "cumulative_peak_ram_mb": 3155.78125, "device_memory_mb": 0.0, "device_memory_metric": "mps_current_allocated_memory_mb"}
+{"stage": "build_sequences", "elapsed_sec": 29.1522234580043, "cumulative_peak_ram_mb": 5460.34375, "device_memory_mb": 0.0, "device_memory_metric": "mps_current_allocated_memory_mb", "n_train_sequences": 255190, "n_val_sequences": 109832}
+{"stage": "build_tft_long_dataframe_train", "elapsed_sec": 4.097367791997385, "cumulative_peak_ram_mb": 6316.640625, "device_memory_mb": 0.0, "device_memory_metric": "mps_current_allocated_memory_mb"}
+{"stage": "build_tft_long_dataframe_val", "elapsed_sec": 1.4207086249953136, "cumulative_peak_ram_mb": 6316.640625, "device_memory_mb": 0.0, "device_memory_metric": "mps_current_allocated_memory_mb"}
+{"stage": "build_training_dataset", "elapsed_sec": 11.72534325000015, "cumulative_peak_ram_mb": 6448.828125, "device_memory_mb": 0.0, "device_memory_metric": "mps_current_allocated_memory_mb"}
+{"stage": "build_validation_dataset", "elapsed_sec": 4.133108583991998, "cumulative_peak_ram_mb": 6448.828125, "device_memory_mb": 0.0, "device_memory_metric": "mps_current_allocated_memory_mb"}
+{"stage": "model_instantiate", "elapsed_sec": 14.45840354199754, "cumulative_peak_ram_mb": 6448.828125, "device_memory_mb": 0.0, "device_memory_metric": "mps_current_allocated_memory_mb"}
+{"stage": "epoch1_train_and_validation", "elapsed_sec": 637.363505375004, "cumulative_peak_ram_mb": 6448.828125, "device_memory_mb": 0.007568359375, "device_memory_metric": "mps_current_allocated_memory_mb", "epochs_completed": 1, "best_val_loss": 0.554863691329956}
+{"stage": "checkpoint_reload", "elapsed_sec": 16.4532180410024, "cumulative_peak_ram_mb": 6448.828125, "device_memory_mb": 2.030517578125, "device_memory_metric": "mps_current_allocated_memory_mb"}
+{"stage": "prediction", "elapsed_sec": 91.77682504100085, "cumulative_peak_ram_mb": 6448.828125, "device_memory_mb": 0.007568359375, "device_memory_metric": "mps_current_allocated_memory_mb", "n_predictions": 109832}
