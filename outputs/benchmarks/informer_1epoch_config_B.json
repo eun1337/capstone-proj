@@ -1,0 +1,28 @@
+{
+  "family": "Informer",
+  "configuration": "lookback=26, e_layers=6, n_heads=16, batch_size=32(fixed), learning_rate=0.0001(fixed), max_epochs=1(benchmark override)",
+  "n_train": 154427,
+  "n_val": 100763,
+  "sequence_build_time_sec": 26.425618749999558,
+  "data_prep_time_sec": 30.45841962499253,
+  "train_time_sec": 1281.370711083,
+  "predict_time_sec": 194.97311762500613,
+  "total_time_sec": 1534.908167875008,
+  "epochs_completed": 1,
+  "best_epoch": 1,
+  "peak_ram_mb": 6917.359375,
+  "device": "mps",
+  "device_memory_mb": 614.4921875,
+  "device_memory_metric": "mps_current_allocated_memory_mb",
+  "status": "completed",
+  "metrics_not_used_for_decision": {
+    "wape": 65.4373750863086,
+    "bias": -17.36651677370818,
+    "rmse": 19.124037897764083,
+    "mae": 2.942321241959235,
+    "mase": 1.0273402409777252,
+    "n": 100763,
+    "mase_n": 93545
+  },
+  "notes": "max_epochs=1은 benchmark 전용 override(production trainer 파라미터 그대로 사용, 코드 변경 아님). compute scaling 확인 목적, 성능 비교 아님"
+}
