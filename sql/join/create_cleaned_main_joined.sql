@@ -21,7 +21,7 @@
 --   2) 공휴일: 설날/추석이면 1, 아니면(NULL) 0인 이진 플래그로 인코딩
 --      covid_영향여부: COALESCE(..., 0)
 --   3) row_id: 트랜잭션 원본에 PK가 없어(문서 docs/join_key_candidates.md
---      참고), 협업자와 파일로 결과를 주고받을 때 각자 만든 파생변수를
+--      참고), 파생변수를
 --      행 단위로 다시 merge할 기준이 필요해서 추가한 surrogate key.
 --      DROP/재생성마다 값이 새로 매겨지므로, 재생성 이후엔 이전에 내보낸
 --      파일들과 row_id가 더 이상 대응되지 않는다는 점 주의.
@@ -59,7 +59,7 @@ ALTER TABLE cleaned_main_joined_v1 MODIFY 시도 VARCHAR(20) NULL;
 ALTER TABLE cleaned_main_joined_v1 ADD INDEX idx_date (년, 월, 일);
 ALTER TABLE cleaned_main_joined_v1 ADD INDEX idx_sido (시도);
 
--- 협업자와 파일(parquet/csv)로 결과를 주고받을 때 행 단위 merge 기준으로
+-- 행 단위 merge 기준으로
 -- 쓸 surrogate key (원본 트랜잭션엔 PK가 없어서 추가)
 ALTER TABLE cleaned_main_joined_v1
   ADD COLUMN row_id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY FIRST;
