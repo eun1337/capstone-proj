@@ -1,6 +1,6 @@
 """
 progress.py
-Day3 RF/LightGBM 공통 진행률/소요시간 기록. config x horizon x fold 단위 실행이 끝날 때마다
+Forecasting 공통 진행률/소요시간 기록. config x horizon x fold 단위 실행이 끝날 때마다
 호출부가 측정한 시간값을 받아 진행률/평균 실행시간/ETA를 계산해 record(dict)로 반환한다.
 시간 측정(perf_counter) 자체는 호출부 책임이며, 여기서는 상태를 들고 있지 않는다.
 """

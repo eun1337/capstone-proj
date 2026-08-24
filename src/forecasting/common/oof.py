@@ -1,6 +1,6 @@
 """
 oof.py
-Day3 RF/LightGBM 공통 OOF row 생성/검증/저장. metric 계산은 evaluator.compute_metrics()의
+Forecasting 공통 OOF row 생성/검증/저장. metric 계산은 evaluator.compute_metrics()의
 책임이며, 이 파일은 fold별 validation row 단위 실제값/예측값만 다룬다.
 """
 
@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.ml.day3_rf_lightgbm.common.config import HORIZONS
+from src.forecasting.common.config import HORIZONS
 
 REQUIRED_KEY_COLS = ("center_id", "sku_id", "week_st", "target_date")
 METADATA_COLS = ("stage", "model_family", "config_id", "seed", "horizon", "fold_id")

@@ -1,5 +1,5 @@
 """
-Day3 RF/LightGBM 공통 CV fold 생성기 (P10/P13/B robustness).
+Forecasting 공통 CV fold 생성기 (P10/P13/B robustness).
 
 P10/P13의 validation 구간과 모든 train purge는 horizon별 target_date 기준으로 처리하며,
 B robustness는 week_st 기준 1주 step으로 순회하되 target_date 기준으로 미래 누수를 차단한다.
@@ -7,7 +7,7 @@ B robustness는 week_st 기준 1주 step으로 순회하되 target_date 기준�
 
 import pandas as pd
 
-from src.ml.day3_rf_lightgbm.common.config import (
+from src.forecasting.common.config import (
     B_HISTORY_START,
     FINAL_TRAIN_CUTOFF,
     HORIZONS,

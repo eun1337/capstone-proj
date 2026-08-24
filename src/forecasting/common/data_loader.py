@@ -1,12 +1,12 @@
 """
 data_loader.py
-Day3 RF/LightGBM 공통 feature/target 로더. config.py에 Freeze된 horizon별 30개
+Forecasting 공통 feature/target 로더. config.py에 Freeze된 horizon별 30개
 feature만 사용하며, 자동 feature discovery는 하지 않는다.
 """
 
 import pandas as pd
 
-from src.ml.day3_rf_lightgbm.common.config import (
+from src.forecasting.common.config import (
     DEVELOPMENT_PATH,
     HOLDOUT_PATH,
     HORIZONS,

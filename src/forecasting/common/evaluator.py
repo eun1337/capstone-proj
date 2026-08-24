@@ -1,6 +1,6 @@
 """
 evaluator.py
-Day3 RF/LightGBM 공통 평가 - WAPE/Bias/RMSE/MAE/MASE. 원 수량(raw) scale에서 계산하며,
+Forecasting 공통 평가 - WAPE/Bias/RMSE/MAE/MASE. 원 수량(raw) scale에서 계산하며,
 MASE는 통계모델 트랙(06_evaluate_statistical_models.py)과 동일하게 (center_id, sku_id)별
 lag-1 naive scale을 사용한 row-level scaled error 평균이다.
 """

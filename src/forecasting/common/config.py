@@ -1,13 +1,13 @@
 """
 config.py
-Day3 RF/LightGBM 공통 설정 - 데이터 경로, horizon, target/feature 정의, fold 날짜 상수, seed, P21 선택 기준.
+Forecasting 공통 설정 - 데이터 경로, horizon, target/feature 정의, fold 날짜 상수, seed, P21 선택 기준.
 """
 
 from pathlib import Path
 
 import pandas as pd
 
-PROJECT_ROOT = Path(__file__).resolve().parents[4]
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 DEVELOPMENT_PATH = PROJECT_ROOT / "data" / "development_2021_2023.parquet"
 HOLDOUT_PATH = PROJECT_ROOT / "data" / "holdout_2024.parquet"
