@@ -1,9 +1,10 @@
 """
 preprocessing.py
-RandomForest 전용 입력 전처리. Frozen 30개 feature에 dtype 정규화 + 구조적 NaN 5개
-train-fit 계층형 median(소->중->대->train 전체) + KAN 3종 OneHotEncoder(sparse)를 적용해
-sparse matrix를 만든다. train에서만 fit하고 validation/test/holdout은 transform만 한다.
-분석용 analyze_nan_hierarchy.py에는 의존하지 않는 독립 구현이다.
+
+Random Forest 입력 전처리.
+Frozen feature에 dtype 정규화와 train-fit 계층형 median을 적용하고,
+KAN categorical feature를 OneHotEncoder로 변환해 sparse matrix를 만든다.
+validation/test/holdout에는 train에서 fit한 변환만 적용한다.
 """
 
 import numpy as np
@@ -11,8 +12,8 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 
-from src.ml.day3_rf_lightgbm.common import config as cfg
-from src.ml.day3_rf_lightgbm.common.input_preprocessing import normalize_model_input_dtypes
+from src.forecasting.common import config as cfg
+from src.forecasting.common.input_preprocessing import normalize_model_input_dtypes
 
 NAN_FEATURES = (
     "adi_expanding_filled",

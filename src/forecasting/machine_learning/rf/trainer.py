@@ -1,20 +1,23 @@
 """
 trainer.py
-Random Forest 1-fold 학습/평가. RFPreprocessor + common/evaluator.py + common/oof.py를
-재사용해 fold 하나의 train/validation을 학습·평가하고 metrics/OOF/시간 기록을 반환한다.
+
+Random Forest 학습/평가.
+train_and_evaluate_fold는 한 CV fold의 학습·평가와 OOF 생성을 담당하고,
+fit_final_model은 validation 없이 전체 학습 데이터로 Final model만 fit한다.
 """
 
 import time
 
+import joblib
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 
-from src.ml.day3_rf_lightgbm.common import config as cfg
-from src.ml.day3_rf_lightgbm.common import evaluator as ev
-from src.ml.day3_rf_lightgbm.common import oof as oo
-from src.ml.day3_rf_lightgbm.rf.config import FIXED_PARAMS
-from src.ml.day3_rf_lightgbm.rf.preprocessing import RFPreprocessor
+from src.forecasting.common import config as cfg
+from src.forecasting.common import evaluator as ev
+from src.forecasting.common import oof as oo
+from src.forecasting.machine_learning.rf.config import FIXED_PARAMS
+from src.forecasting.machine_learning.rf.preprocessing import RFPreprocessor
 
 
 def train_and_evaluate_fold(
@@ -85,4 +88,43 @@ def train_and_evaluate_fold(
         "total_time_sec": total_time_sec,
         "n_train": len(train_df),
         "n_val": len(val_df),
+    }
+
+
+def fit_final_model(
+    full_df: pd.DataFrame,
+    horizon: int,
+    *,
+    n_estimators: int,
+    max_features,
+    min_samples_leaf: int,
+    seed: int,
+    model_artifact_path,
+) -> dict:
+    """validation 없이 full_df 전체로 fit만 한다(evaluate 없음, best 선택 없음).
+    model_artifact_path에 {preprocessor, model}을 joblib으로 저장한다."""
+    t0 = time.perf_counter()
+    preprocessor = RFPreprocessor()
+    X = preprocessor.fit_transform(full_df, horizon)
+    preprocessing_time_sec = time.perf_counter() - t0
+
+    target_col = cfg.TARGET_COLS[horizon]
+    y_log = np.log1p(full_df[target_col].to_numpy(dtype=float))
+
+    model = RandomForestRegressor(
+        n_estimators=n_estimators, max_features=max_features,
+        min_samples_leaf=min_samples_leaf, random_state=seed, **FIXED_PARAMS,
+    )
+
+    t0 = time.perf_counter()
+    model.fit(X, y_log)
+    fit_time_sec = time.perf_counter() - t0
+
+    joblib.dump({"preprocessor": preprocessor, "model": model}, model_artifact_path)
+
+    return {
+        "model_artifact_path": str(model_artifact_path),
+        "n_train_rows": len(full_df),
+        "preprocessing_time_sec": preprocessing_time_sec,
+        "fit_time_sec": fit_time_sec,
     }
