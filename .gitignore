@@ -16,3 +16,7 @@ output.txt
 analysis-results/
 src/ml/feature_engineering/*_log.txt
 src/ml/models/*_log.txt
+lightning_logs/
+outputs/benchmarks/p12/_checkpoints/
+outputs/benchmarks/p12/queue_logs/
+outputs/audits/lightgbm_protocol_integration_summary.json
