@@ -57,12 +57,7 @@ def main() -> None:
         na_mismatch = left_na != right_na  # 한쪽만 NaN이면 그 자체로 변경
         both_valid = ~left_na & ~right_na
         value_mismatch = np.zeros(len(left), dtype=bool)
-        if pd.api.types.is_float_dtype(left) and pd.api.types.is_float_dtype(right):
-            value_mismatch[both_valid] = ~np.isclose(
-                left.to_numpy()[both_valid], right.to_numpy()[both_valid], equal_nan=False
-            )
-        else:
-            value_mismatch[both_valid] = left.to_numpy()[both_valid] != right.to_numpy()[both_valid]
+        value_mismatch[both_valid] = left.to_numpy()[both_valid] != right.to_numpy()[both_valid]
         n_diff = int(na_mismatch.sum()) + int(value_mismatch.sum())
         assert n_diff == 0, f"경제피처 외 컬럼 변경 발견: {col} ({n_diff}건)"
 
@@ -73,7 +68,8 @@ def main() -> None:
 
     changed = int((final_before["cpi_y2_prev_yoy"].isna() & merged["cpi_y2_prev_yoy"].notna()).sum())
 
-    shutil.copy2(FINAL_PATH, BACKUP_PATH)
+    if not BACKUP_PATH.exists():
+        shutil.copy2(FINAL_PATH, BACKUP_PATH)
     merged.to_parquet(FINAL_PATH, index=False)
 
     print(f"[audit] row 수: {len(final_before):,} -> {len(merged):,} (동일)")
