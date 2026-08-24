@@ -7,7 +7,7 @@ z-score로 표준화하고, KAN static categorical 3종을 train-fit vocabulary(
 
 import numpy as np
 
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import SequenceBatch
+from src.forecasting.deep_learning.common.sequence_builder import SequenceBatch
 
 UNK_TOKEN = "<UNK>"
 

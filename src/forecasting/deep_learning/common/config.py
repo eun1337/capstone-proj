@@ -1,13 +1,12 @@
 """
 config.py
-Day4 LSTM/TFT/Informer 공통 설정. Day3 common의 데이터 경로/horizon/target/fold 날짜 상수/
-KAN categorical/holiday 정의를 그대로 재사용하고, DL 시퀀스에 필요한 lookback 후보와
-feature role(static/time-varying known/observed) 분류만 추가한다. RF/LGBM 전용
-DEMAND_SUMMARY_FEATURES(lag1/rollmean4/rollstd4)는 사용하지 않는다 - qty_log1p는
-raw qty에서 runtime에 다시 계산한다(sequence_builder.py).
+
+DL(LSTM/TFT/Informer) 공통 설정. forecasting 공통 설정을 재사용하고,
+시퀀스 모델의 lookback 후보와 feature role을 정의한다.
+qty_log1p는 sequence_builder.py에서 raw qty로 다시 계산한다.
 """
 
-from src.ml.day3_rf_lightgbm.common.config import (  # noqa: F401
+from src.forecasting.common.config import (  # noqa: F401
     B_HISTORY_START,
     CATEGORICAL_FEATURES,
     DEVELOPMENT_PATH,
@@ -70,8 +69,7 @@ def validate_lookback(lookback: int) -> None:
 
 
 def get_model_feature_roles(horizon: int) -> dict:
-    """horizon별 DL feature role 분류. time_varying_known은 공통 known 4개 +
-    해당 horizon의 holiday 3개다."""
+    """horizon별 DL feature role을 반환한다."""
     validate_horizon(horizon)
     return {
         "static_categorical": STATIC_CATEGORICAL_FEATURES,
@@ -84,7 +82,6 @@ def get_model_feature_roles(horizon: int) -> dict:
 
 
 def get_all_dl_feature_cols(horizon: int) -> tuple[str, ...]:
-    """검증용: 해당 horizon에서 DL이 실제 사용하는 전체 27개 feature(static 6 +
-    time-varying known/observed 21) 목록."""
+    """검증용으로 해당 horizon에서 DL이 사용하는 전체 feature 목록을 반환한다."""
     roles = get_model_feature_roles(horizon)
     return roles["static"] + roles["time_varying_known"] + roles["time_varying_observed"]

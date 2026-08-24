@@ -1,9 +1,9 @@
 """
 structural_nan.py
-DL residual structural NaN(adi_expanding_filled/cv2_expanding_filled) 처리. 이미 feature
-engineering에서 값이 채워진 row는 절대 변경하지 않고, 여전히 NaN인 residual만 fold
-TRAIN row로 fit한 계층형 median(KAN_소분류->중분류->대분류->fold-global)으로 채운다.
-validation은 fit에 쓰지 않는다. imputation 이후에도 NaN/Inf가 남으면 fail-fast한다.
+DL residual structural NaN(adi_expanding_filled/cv2_expanding_filled) 처리. 이미 채워진
+row는 변경하지 않고, 남은 NaN만 fold TRAIN row로 fit한 계층형 median(KAN_소분류->중분류->
+대분류->fold-global)으로 채운다. validation은 fit에 쓰지 않으며, imputation 후에도
+NaN/Inf가 남으면 fail-fast한다.
 """
 
 import numpy as np
@@ -42,10 +42,8 @@ def _summarize(original_nan_mask: pd.Series, resolved_at: pd.Series) -> dict:
 
 
 def apply_residual_nan_medians(df: pd.DataFrame, maps: dict) -> tuple[pd.DataFrame, dict]:
-    """maps(fit_residual_nan_medians 결과)로 df(train+validation 전체 history)의
-    RESIDUAL_NAN_FEATURES residual NaN만 채운 복사본과 feature별 처리 요약을 반환한다.
-    기존 non-NaN 값이 바뀌면 즉시 ValueError, imputation 후에도 NaN/Inf가 남으면
-    즉시 ValueError."""
+    """maps로 residual NaN만 채운 복사본과 feature별 처리 요약을 반환한다.
+    기존 non-NaN 값이 바뀌거나 처리 후 NaN/Inf가 남으면 fail-fast한다."""
     out = df.copy()
     summary = {}
 

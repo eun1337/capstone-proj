@@ -1,13 +1,11 @@
 """
 sequence_builder.py
-(center_id, sku_id) 그룹을 week_st 오름차순으로 정렬한 뒤, 각 origin row(=lookback
-윈도우의 마지막 주)마다 encoder 길이=lookback 시퀀스와 horizon별 raw target을 만든다.
-origin 이후 미래 row는 encoder에 절대 포함하지 않는다. 연속된 lookback주 이력이 없거나
-target이 NaN인 origin은 건너뛰고 개수만 센다. adi/cv2 expanding의 구조적 residual NaN은
-이 함수를 부르기 전에 common/structural_nan.py로 이미 채워져 있어야 하며, 그럼에도
-lookback 윈도우 안에 NaN/Inf가 남아 있으면 조용히 skip하지 않고 즉시 실패한다(imputation
-누락 감지). qty_log1p는 raw qty에서 이 함수 안에서 다시 계산한다(기존 qty_log1p
-컬럼에 재적용하지 않음).
+(center_id, sku_id)를 week_st 오름차순 정렬 후, 각 origin row(=lookback 윈도우 마지막 주)마다
+encoder 길이=lookback 시퀀스와 horizon별 raw target을 만든다. origin 이후 미래 row는 encoder에
+포함하지 않는다. 연속 lookback주 이력이 없거나 target이 NaN인 origin은 skip한다. adi/cv2
+residual NaN은 structural_nan.py로 사전에 채워져 있어야 하며, 그래도 lookback 윈도우에
+NaN/Inf가 남으면 즉시 실패한다(imputation 누락 감지). qty_log1p는 raw qty에서 이 함수 안에서
+다시 계산한다.
 """
 
 from dataclasses import dataclass
@@ -15,7 +13,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from src.ml.day4_lstm_tft_informer.common.config import (
+from src.forecasting.deep_learning.common.config import (
     TARGET_COLS,
     get_model_feature_roles,
     validate_horizon,
@@ -86,7 +84,7 @@ def build_sequences(df: pd.DataFrame, horizon: int, lookback: int) -> SequenceBa
         for i in range(n):
             if run_length[i] < lookback or np.isnan(target_arr[i]):
                 n_insufficient += 1
-                skipped_keys.append((center_id, sku_id, week_arr[i]))
+                skipped_keys.append((center_id, sku_id, pd.Timestamp(week_arr[i])))
                 continue
             window = tv_arr[i - lookback + 1: i + 1]
             if not np.isfinite(window).all():
@@ -122,10 +120,7 @@ def build_sequences(df: pd.DataFrame, horizon: int, lookback: int) -> SequenceBa
 
 
 def split_batch_by_origin_keys(batch: SequenceBatch, origin_keys: set) -> SequenceBatch:
-    """batch.keys의 (center_id, sku_id, week_st)가 origin_keys(집합)에 속하는 시퀀스만
-    골라 서브셋 SequenceBatch를 만든다. 서브셋 자체는 별도 스킵이 없으므로
-    n_insufficient_history/skipped_keys는 0/빈 리스트로 둔다(전체 스킵 집계는
-    원본 batch.skipped_keys를 이용해 호출부에서 따로 계산)."""
+    """origin_keys에 해당하는 시퀀스만 선택해 서브셋 SequenceBatch를 반환한다."""
     keys_tuples = list(batch.keys[[CENTER_COL, SKU_COL, WEEK_COL]].itertuples(index=False, name=None))
     mask = np.array([k in origin_keys for k in keys_tuples])
     return SequenceBatch(
@@ -140,7 +135,6 @@ def split_batch_by_origin_keys(batch: SequenceBatch, origin_keys: set) -> Sequen
 
 
 def fold_origin_key_set(df: pd.DataFrame, mask: pd.Series) -> set:
-    """df.loc[mask]의 (center_id, sku_id, week_st) 키 집합을 만든다 - fold의 train_mask/
-    val_mask를 시퀀스 origin 분리에 쓰기 위한 헬퍼."""
+    """fold mask에 해당하는 (center_id, sku_id, week_st) origin key 집합을 반환한다."""
     sub = df.loc[mask, [CENTER_COL, SKU_COL, WEEK_COL]]
     return set(sub.itertuples(index=False, name=None))
