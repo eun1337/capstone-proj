@@ -1,13 +1,14 @@
 """
 trainer.py
-TFT 1-fold 학습/평가. fold TRAIN으로 adi/cv2 residual NaN 계층형 median을 fit해 전체
-history에 적용한 뒤 tft/dataset_adapter로 TimeSeriesDataSet을 만들고, pytorch_lightning
-Trainer(ModelCheckpoint+EarlyStopping+gradient_clip_val)로 학습한다. day3
-common/evaluator, common/oof를 재사용해 metrics/OOF/시간/체크포인트 기록을 반환한다.
+
+TFT 학습/평가.
+
+fold train으로 residual NaN 처리를 fit한 뒤 TimeSeriesDataSet을 구성해
+한 CV fold의 학습·평가와 OOF 생성을 수행한다.
+EarlyStopping 없이 max_epochs를 모두 학습한 마지막 epoch 모델을 평가한다.
 """
 
 import random
-import re
 import resource
 import sys
 import time
@@ -16,30 +17,26 @@ from pathlib import Path
 import lightning as L
 import numpy as np
 import torch
-from lightning.pytorch.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_forecasting import TemporalFusionTransformer
 from pytorch_forecasting.metrics import RMSE
 
-from src.ml.day3_rf_lightgbm.common import evaluator as ev
-from src.ml.day3_rf_lightgbm.common import oof as oo
-from src.ml.day4_lstm_tft_informer.common.config import get_model_feature_roles
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import (
+from src.forecasting.common import evaluator as ev
+from src.forecasting.common import oof as oo
+from src.forecasting.deep_learning.common.config import get_model_feature_roles
+from src.forecasting.deep_learning.common.sequence_builder import (
     build_sequences,
     fold_origin_key_set,
     split_batch_by_origin_keys,
 )
-from src.ml.day4_lstm_tft_informer.common.structural_nan import (
+from src.forecasting.deep_learning.common.structural_nan import (
     apply_residual_nan_medians,
     fit_residual_nan_medians,
 )
-from src.ml.day4_lstm_tft_informer.tft.config import (
-    EARLY_STOPPING_MIN_DELTA,
-    EARLY_STOPPING_MODE,
-    EARLY_STOPPING_PATIENCE,
+from src.forecasting.deep_learning.tft.config import (
     LSTM_LAYERS,
     OPTIMIZER,
 )
-from src.ml.day4_lstm_tft_informer.tft.dataset_adapter import (
+from src.forecasting.deep_learning.tft.dataset_adapter import (
     build_tft_long_dataframe,
     build_training_dataset,
     build_validation_dataset,
@@ -71,8 +68,7 @@ def _peak_ram_mb() -> float:
 
 
 def _device_memory_mb(device: str) -> tuple:
-    """CUDA는 실제 peak(max_memory_allocated), MPS는 peak 추적 API가 없어
-    current_allocated_memory(호출 시점 값, peak 아님)만 제공한다."""
+    """CUDA peak 또는 MPS 현재 할당 메모리와 해당 지표명을 반환한다."""
     try:
         if device == "cuda":
             return torch.cuda.max_memory_allocated() / (1024 * 1024), "cuda_max_memory_allocated_mb"
@@ -103,9 +99,10 @@ def train_and_evaluate_fold(
     config_id: str,
     checkpoint_dir,
 ) -> dict:
-    """fold(day3 common/folds.py 결과 dict) 하나로 TFT를 학습·평가하고 metrics/OOF/
-    시간/체크포인트 기록을 반환한다. df는 해당 fold의 train+validation 기간을 모두
-    포함하는 이력이어야 한다(LSTM과 동일한 fold 경계/전체 history 원칙)."""
+    """한 CV fold의 TFT를 학습·평가하고 metrics/OOF/시간 기록을 반환한다.
+    validation origin의 lookback history를 보존하기 위해 전체 이력에서 시퀀스를 만든 뒤
+    fold의 train/validation origin으로 분리한다.
+    """
     t_total_start = time.perf_counter()
     device = select_device()
     set_all_seeds(seed)
@@ -157,13 +154,6 @@ def train_and_evaluate_fold(
 
     checkpoint_dir = Path(checkpoint_dir)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_cb = ModelCheckpoint(
-        dirpath=str(checkpoint_dir), filename="{epoch}", monitor="val_loss", mode="min", save_top_k=1,
-    )
-    early_stop_cb = EarlyStopping(
-        monitor="val_loss", patience=EARLY_STOPPING_PATIENCE,
-        min_delta=EARLY_STOPPING_MIN_DELTA, mode=EARLY_STOPPING_MODE,
-    )
 
     t0 = time.perf_counter()
     trainer = L.Trainer(
@@ -171,7 +161,7 @@ def train_and_evaluate_fold(
         accelerator=_ACCELERATOR_MAP[device],
         devices=1,
         gradient_clip_val=gradient_clip_val,
-        callbacks=[checkpoint_cb, early_stop_cb],
+        callbacks=[],
         enable_progress_bar=False,
         logger=False,
     )
@@ -179,17 +169,15 @@ def train_and_evaluate_fold(
     train_time_sec = time.perf_counter() - t0
     epochs_completed = trainer.current_epoch
 
-    best_model_path = checkpoint_cb.best_model_path
-    best_val_loss = float(checkpoint_cb.best_model_score)
-    match = re.search(r"epoch=(\d+)", best_model_path)
-    best_epoch = int(match.group(1)) + 1 if match else -1
-
-    best_model = TemporalFusionTransformer.load_from_checkpoint(best_model_path)
-    best_model.eval()
+    # 마지막 epoch의 in-memory model을 평가하며 final_val_loss는 diagnostic으로만 기록한다.
+    final_val_loss_tensor = trainer.callback_metrics.get("val_loss")
+    final_val_loss = float(final_val_loss_tensor) if final_val_loss_tensor is not None else float("nan")
+    trainer.save_checkpoint(str(checkpoint_dir / "final.ckpt"))
+    model.eval()
 
     t0 = time.perf_counter()
     with torch.no_grad():
-        prediction_result = best_model.predict(val_dataloader, mode="prediction", return_index=True)
+        prediction_result = model.predict(val_dataloader, mode="prediction", return_index=True)
     predict_time_sec = time.perf_counter() - t0
 
     raw_pred_log = prediction_result.output.squeeze(-1).cpu().numpy()
@@ -235,8 +223,8 @@ def train_and_evaluate_fold(
         "predict_time_sec": predict_time_sec,
         "total_time_sec": total_time_sec,
         "epochs_completed": epochs_completed,
-        "best_epoch": best_epoch,
-        "best_val_loss": best_val_loss,
+        "final_epoch": epochs_completed,
+        "final_val_loss": final_val_loss,
         "gradient_clip_val": gradient_clip_val,
         "optimizer": model.hparams.optimizer,
         "device": device,
@@ -244,4 +232,65 @@ def train_and_evaluate_fold(
         "peak_ram_mb": _peak_ram_mb(),
         "device_memory_mb": device_memory_mb,
         "device_memory_metric": device_memory_metric,
+    }
+
+
+def fit_final_model(
+    full_df,
+    horizon: int,
+    lookback: int,
+    *,
+    hidden_size: int,
+    hidden_continuous_size: int,
+    attention_head_size: int,
+    dropout: float,
+    learning_rate: float,
+    gradient_clip_val: float,
+    batch_size: int,
+    max_epochs: int,
+    seed: int,
+    checkpoint_dir,
+) -> dict:
+    """validation 없이 전체 이력으로 max_epochs를 학습하고 마지막 epoch artifact를 저장한다."""
+    device = select_device()
+    set_all_seeds(seed)
+
+    residual_nan_maps = fit_residual_nan_medians(full_df)
+    df_imputed, _ = apply_residual_nan_medians(full_df, residual_nan_maps)
+    batch = build_sequences(df_imputed, horizon, lookback)
+    long_df = build_tft_long_dataframe(batch, df_imputed, horizon, group_offset=0)
+
+    training_dataset = build_training_dataset(long_df, horizon, lookback)
+    train_dataloader = training_dataset.to_dataloader(train=True, batch_size=batch_size, num_workers=0)
+
+    model = TemporalFusionTransformer.from_dataset(
+        training_dataset, hidden_size=hidden_size, hidden_continuous_size=hidden_continuous_size,
+        attention_head_size=attention_head_size, dropout=dropout, lstm_layers=LSTM_LAYERS,
+        learning_rate=learning_rate, optimizer=OPTIMIZER, loss=RMSE(), output_size=1,
+    )
+
+    checkpoint_dir = Path(checkpoint_dir)
+    checkpoint_dir.mkdir(parents=True, exist_ok=True)
+
+    t0 = time.perf_counter()
+    trainer = L.Trainer(
+        max_epochs=max_epochs, accelerator=_ACCELERATOR_MAP[device], devices=1,
+        gradient_clip_val=gradient_clip_val, callbacks=[], enable_progress_bar=False, logger=False,
+    )
+    trainer.fit(model, train_dataloaders=train_dataloader)
+    fit_time_sec = time.perf_counter() - t0
+    epochs_completed = trainer.current_epoch
+
+    model_artifact_path = checkpoint_dir / "final.ckpt"
+    trainer.save_checkpoint(str(model_artifact_path))
+
+    # 2024 holdout에서 동일한 train-fit dataset 설정을 재사용하기 위해 함께 저장한다.
+    training_dataset.save(str(checkpoint_dir / "training_dataset.pkl"))
+
+    return {
+        "model_artifact_path": str(model_artifact_path),
+        "n_train_sequences": len(batch.target),
+        "epochs_completed": epochs_completed,
+        "fit_time_sec": fit_time_sec,
+        "device": device,
     }

@@ -1,9 +1,7 @@
 """
-smoke_test.py
-TFT end-to-end functional smoke test - 실제 P10 h1 Fold1 구조 기반의 작은 재현 가능
-subset으로 residual NaN imputation -> TimeSeriesDataSet 변환 -> fit -> predict ->
-inverse transform -> metrics -> OOF 전체가 오류 없이 연결되는지만 확인한다. 성능값은
-Search Space 판단에 쓰지 않는다.
+tft_smoke_test.py
+TFT end-to-end functional smoke test. P10 h1 Fold1 기반 재현 가능 subset으로 residual NaN
+imputation~OOF 전체 연결을 확인한다. 성능값은 Search Space 판단에 쓰지 않는다.
 """
 
 import tempfile
@@ -12,16 +10,16 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.ml.day3_rf_lightgbm.common import folds as day3_folds
-from src.ml.day3_rf_lightgbm.common import oof as day3_oof
-from src.ml.day3_rf_lightgbm.common.data_loader import load_development
-from src.ml.day4_lstm_tft_informer.common.config import get_model_feature_roles
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import (
+from src.forecasting.common import folds
+from src.forecasting.common import oof
+from src.forecasting.common.data_loader import load_development
+from src.forecasting.deep_learning.common.config import get_model_feature_roles
+from src.forecasting.deep_learning.common.sequence_builder import (
     build_sequences,
     fold_origin_key_set,
     split_batch_by_origin_keys,
 )
-from src.ml.day4_lstm_tft_informer.common.structural_nan import (
+from src.forecasting.deep_learning.common.structural_nan import (
     RESIDUAL_NAN_FEATURES,
     apply_residual_nan_medians,
     fit_residual_nan_medians,
@@ -29,7 +27,7 @@ from src.ml.day4_lstm_tft_informer.common.structural_nan import (
 from pytorch_forecasting.data.encoders import NaNLabelEncoder
 from sklearn.preprocessing import StandardScaler
 
-from src.ml.day4_lstm_tft_informer.tft.config import (
+from src.forecasting.deep_learning.tft.config import (
     OPTIMIZER,
     SMOKE_ATTENTION_HEAD_SIZE,
     SMOKE_DROPOUT,
@@ -40,12 +38,12 @@ from src.ml.day4_lstm_tft_informer.tft.config import (
     SMOKE_LEARNING_RATE,
     SMOKE_SEED,
 )
-from src.ml.day4_lstm_tft_informer.tft.dataset_adapter import (
+from src.forecasting.deep_learning.tft.dataset_adapter import (
     build_tft_long_dataframe,
     build_training_dataset,
     build_validation_dataset,
 )
-from src.ml.day4_lstm_tft_informer.tft.trainer import train_and_evaluate_fold
+from src.forecasting.deep_learning.tft.trainer import train_and_evaluate_fold
 
 HORIZON = 1
 LOOKBACK = 13
@@ -55,10 +53,11 @@ SMOKE_BATCH_SIZE = 32
 
 def build_smoke_subset():
     dev = load_development()
-    fold = day3_folds.generate_expanding_folds(dev, 2022, HORIZON)[0]  # P10 h1 Fold1
+    sub_a = dev[dev["center_id"] == "A"].copy()
+    fold = folds.generate_expanding_folds(sub_a, 2022, HORIZON)[0]  # P10 h1 Fold1
 
-    candidate_skus = sorted(dev.loc[fold["train_mask"] | fold["val_mask"], "sku_id"].unique())[:N_SKUS]
-    sub = dev[(dev["center_id"] == "A") & (dev["sku_id"].isin(candidate_skus))].copy()
+    candidate_skus = sorted(sub_a.loc[fold["train_mask"] | fold["val_mask"], "sku_id"].unique())[:N_SKUS]
+    sub = sub_a[sub_a["sku_id"].isin(candidate_skus)].copy()
 
     sub_fold = {
         "fold": fold["fold"],
@@ -138,12 +137,7 @@ def main() -> None:
     check("train target_date < validation_start (P20 purge)",
           bool((train_target_date < sub_fold["val_start"]).all()))
 
-    # --- train-only categorical encoder/scaler fitting 검증 ---
-    # trainer.py와 동일한 경로(build_sequences -> fold별 분리 -> build_tft_long_dataframe
-    # -> build_training_dataset -> build_validation_dataset)로 독립적으로 재구성한 뒤,
-    # validation_dataset이 실제로 사용하는 fitted encoder/scaler(_categorical_encoders,
-    # _scalers)가 train_long만으로 fit한 참조값과 정확히 일치하는지 확인한다.
-    # (validation_dataset이 val_long으로 재fit됐다면 이 값들이 달라진다.)
+    # --- validation에서 encoder/scaler가 재학습되지 않는지 확인 ---
     train_keys = fold_origin_key_set(sub, sub_fold["train_mask"])
     val_keys = fold_origin_key_set(sub, sub_fold["val_mask"])
     train_batch = split_batch_by_origin_keys(full_batch, train_keys)
@@ -191,8 +185,10 @@ def main() -> None:
             stage="P10", model_family="TFT", config_id="SMOKE", checkpoint_dir=checkpoint_dir,
         )
 
-        print(f"validation sequence 누락 수: {result['n_val_insufficient_history']}")
-        print(f"insufficient history 수(train): {result['n_train_insufficient_history']}")
+        print(f"validation sequence 생성 제외 수(lookback 부족 또는 target NaN 포함): "
+              f"{result['n_val_insufficient_history']}")
+        print(f"train sequence 생성 제외 수(lookback 부족 또는 target NaN 포함): "
+              f"{result['n_train_insufficient_history']}")
 
         print()
         print("=== residual NaN(adi/cv2) imputation 요약(trainer 내부) ===")
@@ -220,7 +216,7 @@ def main() -> None:
         check("evaluator 계산 PASS", all(np.isfinite(m[k]) for k in ["wape", "bias", "rmse", "mae"]))
 
         try:
-            day3_oof.validate_oof_frame(result["oof"])
+            oof.validate_oof_frame(result["oof"])
             oof_valid = True
         except Exception:
             oof_valid = False
@@ -233,8 +229,8 @@ def main() -> None:
               f"preprocessing={result['preprocessing_time_sec']:.2f}s "
               f"train={result['train_time_sec']:.2f}s predict={result['predict_time_sec']:.2f}s "
               f"total={result['total_time_sec']:.2f}s")
-        print(f"epochs_completed={result['epochs_completed']} best_epoch={result['best_epoch']} "
-              f"best_val_loss={result['best_val_loss']:.4f}")
+        print(f"epochs_completed={result['epochs_completed']} final_epoch={result['final_epoch']} "
+              f"final_val_loss={result['final_val_loss']:.4f}")
         print(f"device={result['device']} seed={result['seed']} "
               f"peak_ram_mb={result['peak_ram_mb']:.1f} "
               f"device_memory_mb={result['device_memory_mb']} ({result['device_memory_metric']})")
