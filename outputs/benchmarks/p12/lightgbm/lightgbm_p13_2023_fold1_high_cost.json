@@ -1,0 +1,165 @@
+{
+  "experiment_id": "lightgbm_p13_2023_fold1_high_cost",
+  "family": "LightGBM",
+  "corner": "high_cost",
+  "purpose": "COMPUTE_CORNER_MEASUREMENT",
+  "evidence_status": "CANONICAL",
+  "data": {
+    "center": "A",
+    "stage": "P13",
+    "validation_year": 2023,
+    "horizon": 1,
+    "fold": 1,
+    "train_period": "2021-01-04 ~ 2022-12-19",
+    "validation_period": "2023-01-01 ~ 2023-03-31",
+    "train_rows": 872463,
+    "validation_rows": 148000,
+    "train_sequences": "N/A",
+    "validation_sequences": "N/A"
+  },
+  "configuration": {
+    "hpo_space": {
+      "num_leaves": [
+        8,
+        31
+      ],
+      "min_child_samples": [
+        100,
+        1000
+      ]
+    },
+    "cheap_config": {
+      "num_leaves": 8,
+      "min_child_samples": 1000
+    },
+    "high_cost_config": {
+      "num_leaves": 31,
+      "min_child_samples": 100
+    },
+    "requested_config": {
+      "num_leaves": 31,
+      "min_child_samples": 100,
+      "feature_fraction": 0.4,
+      "bagging_fraction": 0.4,
+      "bagging_freq": 1,
+      "lambda_l1": 0.0,
+      "lambda_l2": 0.0,
+      "learning_rate": 0.1,
+      "n_estimators": 100,
+      "max_depth": -1,
+      "boosting_type": "gbdt",
+      "objective": "regression",
+      "n_jobs": -1,
+      "verbosity": -1
+    },
+    "tested_config": {
+      "num_leaves": 31,
+      "min_child_samples": 100,
+      "feature_fraction": 0.4,
+      "bagging_fraction": 0.4,
+      "bagging_freq": 1,
+      "lambda_l1": 0.0,
+      "lambda_l2": 0.0,
+      "learning_rate": 0.1,
+      "n_estimators": 100,
+      "max_depth": -1,
+      "boosting_type": "gbdt",
+      "objective": "regression",
+      "n_jobs": -1,
+      "verbosity": -1
+    },
+    "fixed_config": {
+      "feature_fraction": 0.4,
+      "bagging_fraction": 0.4,
+      "bagging_freq": 1,
+      "lambda_l1": 0.0,
+      "lambda_l2": 0.0,
+      "learning_rate": 0.1,
+      "n_estimators": 100,
+      "max_depth": -1,
+      "boosting_type": "gbdt",
+      "objective": "regression",
+      "n_jobs": -1,
+      "verbosity": -1
+    },
+    "configuration_basis": {
+      "n_estimators": [
+        "official_reference"
+      ],
+      "learning_rate": [
+        "official_reference"
+      ],
+      "num_leaves": [
+        "prior_study"
+      ],
+      "min_child_samples": [
+        "prior_study"
+      ],
+      "feature_fraction": [
+        "prior_study",
+        "official_compute_guidance"
+      ],
+      "bagging_fraction": [
+        "prior_study",
+        "official_compute_guidance"
+      ],
+      "bagging_freq": [
+        "prior_study"
+      ],
+      "lambda_l1": [
+        "official_reference"
+      ],
+      "lambda_l2": [
+        "official_reference"
+      ],
+      "max_depth": [
+        "official_reference"
+      ],
+      "boosting_type": [
+        "official_reference"
+      ]
+    }
+  },
+  "execution": {
+    "seed": 42,
+    "device": "cpu",
+    "backend": "lightgbm.LGBMRegressor",
+    "git_commit": "a20b23380615a1bdb31f30ca87986965f4b63e1f",
+    "git_dirty": true,
+    "software_versions": {
+      "python": "3.12.4",
+      "lightgbm": "4.7.0",
+      "pandas": "2.2.2",
+      "numpy": "2.1.1"
+    },
+    "machine": "eunseocandoit-MacBookAir-2.local",
+    "cpu_model": "Apple M4"
+  },
+  "timing": {
+    "timing_scope": "trainer_preprocess_fit_predict",
+    "data_preparation_sec": 0.6375806250143796,
+    "fit_train_sec": 2.535165749985026,
+    "validation_or_prediction_sec": 0.08509562502149493,
+    "total_runtime_sec": 4.0621649580134545,
+    "cheap_runtime_sec": 3.288879583007656,
+    "runtime_ratio": 1.2351212184845741,
+    "timing_comparable_to_cheap": true
+  },
+  "resource": {
+    "peak_ram_mb": 3084.25
+  },
+  "status": {
+    "completion_status": "completed",
+    "technical_failure": false,
+    "error_message": null,
+    "fallback_occurred": false,
+    "fallback_reason": "N/A"
+  },
+  "observed_compute_result": {
+    "note": "LightGBM: timing/peak_ram 외 추가 진단 없음"
+  },
+  "artifact": {
+    "code_path": "src/ml/benchmarks/p12/lightgbm_profile.py",
+    "canonical_artifact_path": "/Users/eunseo1oo/Desktop/GitHub/capstone-proj/outputs/benchmarks/p12/lightgbm/lightgbm_p13_2023_fold1_high_cost.json"
+  }
+}

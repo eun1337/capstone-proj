@@ -1,0 +1,150 @@
+{
+  "experiment_id": "informer_supp_high_lb13_high_cost",
+  "family": "Informer",
+  "corner": "high_cost",
+  "purpose": "COMPUTE_CORNER_MEASUREMENT_SUPPLEMENTARY_HIGH_LB13",
+  "evidence_status": "CANONICAL",
+  "data": {
+    "center": "A",
+    "stage": "P10",
+    "validation_year": 2022,
+    "horizon": 1,
+    "fold": 1,
+    "train_period": "N/A",
+    "validation_period": "2022-01-01 ~ 2022-03-31",
+    "train_rows": "N/A",
+    "validation_rows": "N/A",
+    "train_sequences": 255190,
+    "validation_sequences": 109832
+  },
+  "configuration": {
+    "hpo_space": {
+      "n_heads": [
+        8,
+        16
+      ]
+    },
+    "cheap_config": {
+      "n_heads": 8,
+      "lookback": 13
+    },
+    "high_cost_config": {
+      "n_heads": 16,
+      "lookback": 13
+    },
+    "requested_config": {
+      "n_heads": 16,
+      "lookback": 13,
+      "e_layers": 2,
+      "d_layers": 1,
+      "d_model": 512,
+      "d_ff": 2048,
+      "factor": 5,
+      "dropout": 0.05,
+      "learning_rate": 0.0001,
+      "batch_size": 32,
+      "max_epochs": 1
+    },
+    "tested_config": {
+      "n_heads": 16,
+      "lookback": 13,
+      "e_layers": 2,
+      "d_layers": 1,
+      "d_model": 512,
+      "d_ff": 2048,
+      "factor": 5,
+      "dropout": 0.05,
+      "learning_rate": 0.0001,
+      "batch_size": 32,
+      "max_epochs": 1
+    },
+    "fixed_config": {
+      "e_layers": 2,
+      "d_layers": 1,
+      "d_model": 512,
+      "d_ff": 2048,
+      "factor": 5,
+      "dropout": 0.05,
+      "learning_rate": 0.0001,
+      "batch_size": 32,
+      "max_epochs": 1
+    },
+    "configuration_basis": {
+      "e_layers": [
+        "official_reference"
+      ],
+      "n_heads": [
+        "official_reference"
+      ],
+      "d_layers": [
+        "official_reference"
+      ],
+      "d_model": [
+        "official_reference"
+      ],
+      "d_ff": [
+        "official_reference"
+      ],
+      "factor": [
+        "official_reference"
+      ],
+      "dropout": [
+        "official_reference"
+      ],
+      "learning_rate": [
+        "official_reference"
+      ],
+      "batch_size": [
+        "official_reference"
+      ],
+      "lookback": [
+        "task_specific"
+      ]
+    }
+  },
+  "execution": {
+    "seed": 42,
+    "device": "mps",
+    "backend": "torch (Informer, informer.trainer)",
+    "git_commit": "a20b23380615a1bdb31f30ca87986965f4b63e1f",
+    "git_dirty": true,
+    "software_versions": {
+      "python": "3.12.4",
+      "torch": "2.13.0",
+      "pandas": "2.2.2",
+      "numpy": "2.1.1"
+    },
+    "machine": "eunseocandoit-MacBookAir-2.local",
+    "cpu_model": "Apple M4"
+  },
+  "timing": {
+    "timing_scope": "single_epoch_forced",
+    "data_preparation_sec": 40.94732662499882,
+    "fit_train_sec": 651.6813161249738,
+    "validation_or_prediction_sec": 61.17812887503533,
+    "total_runtime_sec": 781.042852124956,
+    "cheap_runtime_sec": 775.4547905000218,
+    "runtime_ratio": 1.007206173323568,
+    "timing_comparable_to_cheap": true
+  },
+  "resource": {
+    "peak_ram_mb": 7684.625
+  },
+  "status": {
+    "completion_status": "completed",
+    "technical_failure": false,
+    "error_message": null,
+    "fallback_occurred": false,
+    "fallback_reason": "N/A"
+  },
+  "observed_compute_result": {
+    "note": "Informer supplementary(lb13 revised High, n_heads=16 복원): timing/peak_ram/epochs_completed 외 추가 진단 없음",
+    "epochs_completed": 1,
+    "label_len": 6,
+    "n_heads_confirmed_by_trainer": 16
+  },
+  "artifact": {
+    "code_path": "src/ml/benchmarks/p12/dl_high_lb13_supplementary_profile.py",
+    "canonical_artifact_path": "/Users/eunseo1oo/Desktop/GitHub/capstone-proj/outputs/benchmarks/p12/informer/informer_supp_high_lb13_high_cost.json"
+  }
+}

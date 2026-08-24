@@ -1,0 +1,134 @@
+{
+  "experiment_id": "lstm_p13_2023_fold4_high_cost",
+  "family": "LSTM",
+  "corner": "high_cost",
+  "purpose": "COMPUTE_CORNER_MEASUREMENT",
+  "evidence_status": "CANONICAL",
+  "data": {
+    "center": "A",
+    "stage": "P13",
+    "validation_year": 2023,
+    "horizon": 1,
+    "fold": 4,
+    "train_period": "2021-01-04 ~ 2023-09-18",
+    "validation_period": "2023-10-01 ~ 2023-12-31",
+    "train_rows": "N/A",
+    "validation_rows": "N/A",
+    "train_sequences": 1032103,
+    "validation_sequences": 154463
+  },
+  "configuration": {
+    "hpo_space": {
+      "hidden_size": [
+        32,
+        64
+      ],
+      "lookback": [
+        13,
+        26
+      ]
+    },
+    "cheap_config": {
+      "hidden_size": 32,
+      "lookback": 13
+    },
+    "high_cost_config": {
+      "hidden_size": 64,
+      "lookback": 26
+    },
+    "requested_config": {
+      "hidden_size": 64,
+      "lookback": 26,
+      "learning_rate": 0.001,
+      "batch_size": 1024,
+      "weight_decay": 0.0,
+      "num_layers": 1,
+      "dropout": 0.0,
+      "max_epochs": 1
+    },
+    "tested_config": {
+      "hidden_size": 64,
+      "lookback": 26,
+      "learning_rate": 0.001,
+      "batch_size": 1024,
+      "weight_decay": 0.0,
+      "num_layers": 1,
+      "dropout": 0.0,
+      "max_epochs": 1
+    },
+    "fixed_config": {
+      "learning_rate": 0.001,
+      "batch_size": 1024,
+      "weight_decay": 0.0,
+      "num_layers": 1,
+      "dropout": 0.0,
+      "max_epochs": 1
+    },
+    "configuration_basis": {
+      "hidden_size": [
+        "prior_study"
+      ],
+      "lookback": [
+        "task_specific"
+      ],
+      "learning_rate": [
+        "official_reference"
+      ],
+      "weight_decay": [
+        "official_reference"
+      ],
+      "batch_size": [
+        "prior_study"
+      ],
+      "num_layers": [
+        "official_reference"
+      ],
+      "dropout": [
+        "official_reference"
+      ]
+    }
+  },
+  "execution": {
+    "seed": 42,
+    "device": "mps",
+    "backend": "torch (LSTM, lstm.trainer)",
+    "git_commit": "a20b23380615a1bdb31f30ca87986965f4b63e1f",
+    "git_dirty": true,
+    "software_versions": {
+      "python": "3.12.4",
+      "torch": "2.13.0",
+      "pandas": "2.2.2",
+      "numpy": "2.1.1"
+    },
+    "machine": "eunseocandoit-MacBookAir-2.local",
+    "cpu_model": "Apple M4"
+  },
+  "timing": {
+    "timing_scope": "full_pipeline_fixed_epochs",
+    "data_preparation_sec": 18.276673459011363,
+    "fit_train_sec": 20.31154029199388,
+    "validation_or_prediction_sec": 1.6156560830131639,
+    "total_runtime_sec": 72.75450837498647,
+    "cheap_runtime_sec": 59.72876358299982,
+    "runtime_ratio": 1.2180816077648404,
+    "timing_comparable_to_cheap": true
+  },
+  "resource": {
+    "peak_ram_mb": 10110.15625
+  },
+  "status": {
+    "completion_status": "completed",
+    "technical_failure": false,
+    "error_message": null,
+    "fallback_occurred": false,
+    "fallback_reason": "N/A"
+  },
+  "observed_compute_result": {
+    "note": "LSTM: timing/peak_ram/epochs_completed 외 추가 진단 없음",
+    "epochs_completed": 1
+  },
+  "artifact": {
+    "code_path": "src/ml/benchmarks/p12/lstm_profile.py",
+    "canonical_artifact_path": "/Users/eunseo1oo/Desktop/GitHub/capstone-proj/outputs/benchmarks/p12/lstm/lstm_p13_2023_fold4_high_cost.json"
+  }
+}

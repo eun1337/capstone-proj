@@ -1,0 +1,148 @@
+{
+  "experiment_id": "informer_cheap",
+  "family": "Informer",
+  "corner": "cheap",
+  "purpose": "COMPUTE_CORNER_MEASUREMENT",
+  "evidence_status": "CANONICAL",
+  "data": {
+    "center": "A",
+    "stage": "P10",
+    "validation_year": 2022,
+    "horizon": 1,
+    "fold": 1,
+    "train_period": "N/A",
+    "validation_period": "2022-01-01 ~ 2022-03-31",
+    "train_rows": "N/A",
+    "validation_rows": "N/A",
+    "train_sequences": 255190,
+    "validation_sequences": 109832
+  },
+  "configuration": {
+    "hpo_space": {
+      "lookback": [
+        13,
+        26
+      ]
+    },
+    "cheap_config": {
+      "lookback": 13
+    },
+    "high_cost_config": {
+      "lookback": 26
+    },
+    "requested_config": {
+      "lookback": 13,
+      "e_layers": 2,
+      "n_heads": 8,
+      "d_layers": 1,
+      "d_model": 512,
+      "d_ff": 2048,
+      "factor": 5,
+      "dropout": 0.05,
+      "learning_rate": 0.0001,
+      "batch_size": 32,
+      "max_epochs": 1
+    },
+    "tested_config": {
+      "lookback": 13,
+      "e_layers": 2,
+      "n_heads": 8,
+      "d_layers": 1,
+      "d_model": 512,
+      "d_ff": 2048,
+      "factor": 5,
+      "dropout": 0.05,
+      "learning_rate": 0.0001,
+      "batch_size": 32,
+      "max_epochs": 1
+    },
+    "fixed_config": {
+      "e_layers": 2,
+      "n_heads": 8,
+      "d_layers": 1,
+      "d_model": 512,
+      "d_ff": 2048,
+      "factor": 5,
+      "dropout": 0.05,
+      "learning_rate": 0.0001,
+      "batch_size": 32,
+      "max_epochs": 1
+    },
+    "configuration_basis": {
+      "e_layers": [
+        "official_reference"
+      ],
+      "n_heads": [
+        "official_reference"
+      ],
+      "d_layers": [
+        "official_reference"
+      ],
+      "d_model": [
+        "official_reference"
+      ],
+      "d_ff": [
+        "official_reference"
+      ],
+      "factor": [
+        "official_reference"
+      ],
+      "dropout": [
+        "official_reference"
+      ],
+      "learning_rate": [
+        "official_reference"
+      ],
+      "batch_size": [
+        "official_reference"
+      ],
+      "lookback": [
+        "task_specific"
+      ]
+    }
+  },
+  "execution": {
+    "seed": 42,
+    "device": "mps",
+    "backend": "torch (Informer, informer.trainer)",
+    "git_commit": "a20b23380615a1bdb31f30ca87986965f4b63e1f",
+    "git_dirty": true,
+    "software_versions": {
+      "python": "3.12.4",
+      "torch": "2.13.0",
+      "pandas": "2.2.2",
+      "numpy": "2.1.1"
+    },
+    "machine": "eunseocandoit-MacBookAir-2.local",
+    "cpu_model": "Apple M4"
+  },
+  "timing": {
+    "timing_scope": "single_epoch_forced",
+    "data_preparation_sec": 40.463467166991904,
+    "fit_train_sec": 645.0049637079937,
+    "validation_or_prediction_sec": 63.193311667011585,
+    "total_runtime_sec": 775.4547905000218,
+    "cheap_runtime_sec": null,
+    "runtime_ratio": null,
+    "timing_comparable_to_cheap": false
+  },
+  "resource": {
+    "peak_ram_mb": 7348.484375
+  },
+  "status": {
+    "completion_status": "completed",
+    "technical_failure": false,
+    "error_message": null,
+    "fallback_occurred": false,
+    "fallback_reason": "N/A"
+  },
+  "observed_compute_result": {
+    "note": "Informer: timing/peak_ram/epochs_completed 외 추가 진단 없음",
+    "epochs_completed": 1,
+    "label_len": 6
+  },
+  "artifact": {
+    "code_path": "src/ml/benchmarks/p12/informer_profile.py",
+    "canonical_artifact_path": "/Users/eunseo1oo/Desktop/GitHub/capstone-proj/outputs/benchmarks/p12/informer/informer_cheap.json"
+  }
+}

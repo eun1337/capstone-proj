@@ -1,0 +1,155 @@
+{
+  "experiment_id": "tft_p13_2023_fold1_cheap",
+  "family": "TFT",
+  "corner": "cheap",
+  "purpose": "COMPUTE_CORNER_MEASUREMENT",
+  "evidence_status": "CANONICAL",
+  "data": {
+    "center": "A",
+    "stage": "P13",
+    "validation_year": 2023,
+    "horizon": 1,
+    "fold": 1,
+    "train_period": "N/A",
+    "validation_period": "2023-01-01 ~ 2023-03-31",
+    "train_rows": "N/A",
+    "validation_rows": "N/A",
+    "train_sequences": 742234,
+    "validation_sequences": 141423
+  },
+  "configuration": {
+    "hpo_space": {
+      "hidden_size": [
+        8,
+        16
+      ],
+      "lookback": [
+        13,
+        26
+      ]
+    },
+    "cheap_config": {
+      "hidden_size": 8,
+      "lookback": 13
+    },
+    "high_cost_config": {
+      "hidden_size": 16,
+      "lookback": 26
+    },
+    "requested_config": {
+      "hidden_size": 8,
+      "lookback": 13,
+      "hidden_continuous_size": 8,
+      "attention_head_size": 1,
+      "dropout": 0.1,
+      "learning_rate": 0.001,
+      "gradient_clip_val": 0.1,
+      "batch_size": 256,
+      "lstm_layers": 1,
+      "optimizer": "adam",
+      "max_epochs": 1
+    },
+    "tested_config": {
+      "hidden_size": 8,
+      "lookback": 13,
+      "hidden_continuous_size": 8,
+      "attention_head_size": 1,
+      "dropout": 0.1,
+      "learning_rate": 0.001,
+      "gradient_clip_val": 0.1,
+      "batch_size": 256,
+      "lstm_layers": 1,
+      "optimizer": "adam",
+      "max_epochs": 1
+    },
+    "fixed_config": {
+      "hidden_continuous_size": 8,
+      "attention_head_size": 1,
+      "dropout": 0.1,
+      "learning_rate": 0.001,
+      "gradient_clip_val": 0.1,
+      "batch_size": 256,
+      "lstm_layers": 1,
+      "optimizer": "adam",
+      "max_epochs": 1
+    },
+    "configuration_basis": {
+      "hidden_size": [
+        "official_tutorial"
+      ],
+      "attention_head_size": [
+        "official_tutorial"
+      ],
+      "hidden_continuous_size": [
+        "official_reference",
+        "official_tutorial"
+      ],
+      "dropout": [
+        "official_reference",
+        "official_tutorial"
+      ],
+      "gradient_clip_val": [
+        "official_tutorial"
+      ],
+      "lookback": [
+        "task_specific"
+      ],
+      "batch_size": [
+        "prior_study"
+      ],
+      "learning_rate": [
+        "official_reference",
+        "official_tutorial"
+      ],
+      "lstm_layers": [
+        "official_reference"
+      ],
+      "optimizer": [
+        "official_reference"
+      ]
+    }
+  },
+  "execution": {
+    "seed": 42,
+    "device": "mps",
+    "backend": "pytorch_forecasting.TemporalFusionTransformer",
+    "git_commit": "a20b23380615a1bdb31f30ca87986965f4b63e1f",
+    "git_dirty": true,
+    "software_versions": {
+      "python": "3.12.4",
+      "pytorch-forecasting": "1.8.0",
+      "lightning": "2.6.5",
+      "torch": "2.13.0"
+    },
+    "machine": "eunseocandoit-MacBookAir-2.local",
+    "cpu_model": "Apple M4"
+  },
+  "timing": {
+    "timing_scope": "single_epoch_forced",
+    "data_preparation_sec": 40.403237917023944,
+    "fit_train_sec": 566.712961125013,
+    "validation_or_prediction_sec": 129.22039320797194,
+    "total_runtime_sec": 867.2350806250179,
+    "cheap_runtime_sec": null,
+    "runtime_ratio": null,
+    "timing_comparable_to_cheap": false
+  },
+  "resource": {
+    "peak_ram_mb": 9948.625
+  },
+  "status": {
+    "completion_status": "completed",
+    "technical_failure": false,
+    "error_message": null,
+    "fallback_occurred": false,
+    "fallback_reason": "N/A"
+  },
+  "observed_compute_result": {
+    "note": "TFT: timing/peak_ram/epochs_completed 외 추가 진단 없음",
+    "epochs_completed": 1
+  },
+  "artifact": {
+    "code_path": "src/ml/benchmarks/p12/tft_profile.py",
+    "canonical_artifact_path": "/Users/eunseo1oo/Desktop/GitHub/capstone-proj/outputs/benchmarks/p12/tft/tft_p13_2023_fold1_cheap.json"
+  }
+}
