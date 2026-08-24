@@ -22,7 +22,7 @@ from pmdarima import ARIMA
 
 _THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_THIS_DIR))
-from statistical_utils import (  # noqa: E402
+from common import (  # noqa: E402
     WEEK_COL, QTY_COL, CENTER_COL, SUBCAT_COL, MIDCAT_COL, LARGECAT_COL,
     FORECAST_N_PERIODS, FORECAST_STEP_TO_HORIZON,
     candidate_convergence, expm1_clip,
@@ -44,7 +44,7 @@ DEVELOPMENT_END_WEEK = pd.Timestamp("2023-12-25")  # A/B 공통(시작 window만
 
 EXISTED_BEFORE_REGIME_COL = "existed_before_regime"  # SKU당 상수, A센터는 항상 False
 
-# split_train_val_test.py의 load_first_stock_map()과 동일 파일/sku_id 재구성 규칙
+# 구매 원천 데이터와 동일한 sku_id 재구성 규칙
 # (바코드+"*"+옵션코드+"*"+상품클러스터).
 PURCHASE_MASTER_PATH = BASE_DIR / "data" / "final" / "cleaned_purchase_cleaned_for_pred.parquet"
 PURCHASE_RAW_CENTER_COL = "센터"
@@ -674,6 +674,7 @@ def run_audit(holdout_df: pd.DataFrame, orders_df: pd.DataFrame, df: pd.DataFram
     arima_rows = holdout_df[holdout_df["forecast_source"] == "arima"]
     assert (arima_rows["arima_status"] == "success").all(), "forecast_source=arima인데 arima_status!=success인 행 존재"
     assert (arima_rows["dev_fit_converged"] == True).all(), "forecast_source=arima인데 Development fit이 미수렴인 행 존재"  # noqa: E712
+    assert (arima_rows["state_update_success"] == True).all(), "forecast_source=arima인데 state_update_success!=True인 행 존재"  # noqa: E712
     assert (arima_rows["forecast_success"] == True).all(), "forecast_source=arima인데 forecast_success!=True인 행 존재"  # noqa: E712
 
     pred = holdout_df["prediction"].to_numpy(dtype=float)

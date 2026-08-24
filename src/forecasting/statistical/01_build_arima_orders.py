@@ -21,7 +21,7 @@ from pmdarima import auto_arima
 
 _THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_THIS_DIR))
-from statistical_utils import (  # noqa: E402
+from common import (  # noqa: E402
     AUTO_ARIMA_KWARGS, MIN_HISTORY, WEEK_COL, QTY_COL, CENTER_COL,
     extract_valid_fit_candidates, candidate_convergence, candidate_aicc,
 )
@@ -31,7 +31,6 @@ INPUT_PATH = BASE_DIR / "data" / "development_2021_2023.parquet"
 OUT_DIR = BASE_DIR / "data" / "ml" / "day2_statistical_models"
 
 SKU_COL = "sku_id"
-CENTERS = ["A", "B"]
 
 A_WINDOW_START = pd.Timestamp("2021-01-04")
 A_WINDOW_END = pd.Timestamp("2023-12-25")

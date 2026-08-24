@@ -1,5 +1,5 @@
 """
-07_diagnose_arimax_economic_instability.py
+economic_instability.py
 
 Economic 변수를 포함한 S1/S4의 극단 예측 원인을 사후진단한다.
 
@@ -17,8 +17,8 @@ import sys
 import numpy as np
 import pandas as pd
 
-_THIS_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(_THIS_DIR))
+_STATISTICAL_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_STATISTICAL_DIR))
 m02 = importlib.import_module("02_run_arima_holdout")
 m04 = importlib.import_module("04_prepare_arimax_full_exog")
 m05 = importlib.import_module("05_run_arimax_holdout")
@@ -43,7 +43,7 @@ TOP_N_EXTREME = 200  # 진단용 샘플 크기일 뿐 배제 기준 아님
 TOP_N_REFIT = 15  # (center,sku,exog_block)당 1회 재fit — 개별 fit 비용 때문에 상한을 둠
 
 
-def load_panels() -> pd.DataFrame:
+def load_panels() -> tuple[pd.DataFrame, pd.DataFrame]:
     cols = KEY_COLS + [
         "target_week", "forecast_source", "arimax_status", "exog_block",
         "development_n_obs", "selected_p", "selected_d", "selected_q", "with_intercept",

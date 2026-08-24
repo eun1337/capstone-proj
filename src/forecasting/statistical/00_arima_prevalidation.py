@@ -19,7 +19,7 @@ from pmdarima import auto_arima
 
 _THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_THIS_DIR))
-from statistical_utils import (  # noqa: E402
+from common import (  # noqa: E402
     AUTO_ARIMA_KWARGS, FORECAST_N_PERIODS, FORECAST_STEP_TO_HORIZON, MIN_HISTORY,
     extract_valid_fit_candidates, candidate_convergence, candidate_aicc, expm1_clip,
 )

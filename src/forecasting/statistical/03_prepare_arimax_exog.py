@@ -9,14 +9,10 @@ ARIMA/ARIMAX 학습이나 성능평가는 수행하지 않는다.
 """
 
 from pathlib import Path
-import sys
 
 import pandas as pd
 
-_FEATURE_ENGINEERING_DIR = Path(__file__).resolve().parents[1] / "feature_engineering"
-if str(_FEATURE_ENGINEERING_DIR) not in sys.path:
-    sys.path.insert(0, str(_FEATURE_ENGINEERING_DIR))
-from feature_external_interaction_concat import add_holiday_calendar_features, WEEK_COL  # noqa: E402
+from src.forecasting.feature_engineering.holiday_calendar import add_holiday_calendar_features, WEEK_COL
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 DEV_PATH = BASE_DIR / "data" / "development_2021_2023.parquet"
@@ -49,35 +45,6 @@ def build_statistical_holiday_weekly(week_starts: pd.Series) -> pd.DataFrame:
     if out[WEEK_COL].duplicated().any():
         raise ValueError("생성된 holiday table에 week_st 중복 존재")
     return out
-
-
-def get_future_exog_matrix(holiday_weekly: pd.DataFrame, forecast_origin: pd.Timestamp, n_steps: int = 4) -> pd.DataFrame:
-    """forecast_origin=t에서 step1..n_steps(=t+1..t+n_steps주)의 Holiday exog를 순서대로
-    담은 행렬. ARIMAX가 4-step forecast를 한 번에 생성하므로 h3도 반드시 포함한다."""
-    forecast_origin = pd.Timestamp(forecast_origin)
-    step_weeks = [forecast_origin + pd.Timedelta(weeks=k) for k in range(1, n_steps + 1)]
-
-    lookup = holiday_weekly.set_index(WEEK_COL)
-    missing = [w for w in step_weeks if w not in lookup.index]
-    if missing:
-        raise ValueError(f"holiday table에 없는 week_st: {[w.date().isoformat() for w in missing]}")
-
-    rows = []
-    for step, w in enumerate(step_weeks, start=1):
-        r = lookup.loc[w]
-        rows.append({"step": step, WEEK_COL: w, **{c: int(r[c]) for c in HOLIDAY_COLS}})
-    return pd.DataFrame(rows)
-
-
-def align_training_holiday(holiday_weekly: pd.DataFrame, week_st_series: pd.Series) -> pd.DataFrame:
-    """training/historical 구간 정렬: 주어진 week_st 시리즈에 같은 week_st의 holiday exog를
-    1:1로 붙인다(origin=target 동일 주)."""
-    left = pd.DataFrame({WEEK_COL: pd.to_datetime(pd.Series(week_st_series).reset_index(drop=True))})
-    merged = left.merge(holiday_weekly, on=WEEK_COL, how="left", validate="many_to_one")
-    if merged[HOLIDAY_COLS].isna().any().any():
-        missing_weeks = merged.loc[merged[HOLIDAY_COLS].isna().any(axis=1), WEEK_COL]
-        raise ValueError(f"holiday table에 없는 week_st가 정렬 대상에 존재: {missing_weeks.dt.date.unique().tolist()[:5]}")
-    return merged
 
 
 def load_week_universe() -> pd.Series:

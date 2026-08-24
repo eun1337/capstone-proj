@@ -23,7 +23,7 @@ from pmdarima import ARIMA
 
 _THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_THIS_DIR))
-from statistical_utils import (  # noqa: E402
+from common import (  # noqa: E402
     CENTER_COL, WEEK_COL, QTY_COL,
     candidate_convergence, expm1_clip, coldstart_fallback, lookup_actual,
 )

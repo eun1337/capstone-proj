@@ -19,7 +19,7 @@ import pandas as pd
 
 _THIS_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(_THIS_DIR))
-from statistical_utils import CENTER_COL, WEEK_COL, QTY_COL  # noqa: E402
+from common import CENTER_COL, WEEK_COL, QTY_COL  # noqa: E402
 
 m02 = importlib.import_module("02_run_arima_holdout")
 m03 = importlib.import_module("03_prepare_arimax_exog")
@@ -33,7 +33,6 @@ CENTER_START = {"A": A_HISTORY_START, "B": B_HISTORY_START}
 
 HOLIDAY_WEEKLY_PATH = m03.HOLIDAY_WEEKLY_PATH  # 기존 파일 재사용, 재생성하지 않음
 HOLIDAY_COLS = m03.HOLIDAY_COLS
-get_future_exog_matrix = m03.get_future_exog_matrix
 _audit_row = m03._audit_row
 
 BASE_DIR = Path(__file__).resolve().parents[3]
@@ -54,7 +53,6 @@ EXOG_BLOCKS = {
     "S3": HOLIDAY_COLS,
     "S4": ECONOMIC_COLS + COVID_COLS + HOLIDAY_COLS,
 }
-MAIN_BLOCK = "S4"
 
 
 def load_combined_demand() -> pd.DataFrame:

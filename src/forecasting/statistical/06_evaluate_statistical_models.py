@@ -1,18 +1,20 @@
 """
 06_evaluate_statistical_models.py
 
-2024 Holdout에서 S0~S4 통계모델의 최종 성능을 평가한다.
+2024 Holdout에서 S0~S4 통계 baseline의 성능을 평가한다.
 
 (center_id, sku_id, forecast_origin, horizon) 공통 key를 기준으로
 동일한 평가 모집단을 구성하고, 자기 관측 history가 있는 행을 Main으로 평가한다.
-WAPE, Bias, RMSE, MAE, MASE와 forecast source별 성능,
-coverage 및 cold-start 보조 결과를 함께 산출한다.
+공통 evaluator를 사용해 WAPE, Bias, RMSE, MAE, MASE와 coverage,
+forecast source별 성능 및 cold-start 보조 결과를 산출한다.
 """
 
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+from src.forecasting.common import evaluator as ev
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 DAY2_DIR = BASE_DIR / "data" / "ml" / "day2_statistical_models"
@@ -153,35 +155,36 @@ def build_mase_scales(dev: pd.DataFrame) -> pd.DataFrame:
     b = dev[(dev[CENTER_COL] == "B") & dev[WEEK_COL].between(B_START, B_END)]
     sub = pd.concat([a, b], ignore_index=True).sort_values([CENTER_COL, SKU_COL, WEEK_COL])
 
-    grp = sub.groupby([CENTER_COL, SKU_COL])[QTY_COL]
-    scale_df = pd.DataFrame({"scale": grp.apply(lambda s: s.diff().abs().mean()), "n_obs": grp.size()}).reset_index()
-    scale_df["mase_valid"] = (scale_df["n_obs"] >= 2) & np.isfinite(scale_df["scale"]) & (scale_df["scale"] > 0)
-    scale_df["mase_scale"] = np.where(scale_df["mase_valid"], scale_df["scale"], np.nan)
+    keys_df = sub[[CENTER_COL, SKU_COL]].drop_duplicates().reset_index(drop=True)
+    key_index = pd.MultiIndex.from_frame(keys_df[[CENTER_COL, SKU_COL]])
+    n_obs = sub.groupby([CENTER_COL, SKU_COL])[QTY_COL].size().reindex(key_index).to_numpy()
+
+    mase_scale = ev.build_mase_scale(sub[[CENTER_COL, SKU_COL, WEEK_COL, QTY_COL]], keys_df)
+
+    scale_df = keys_df.copy()
+    scale_df["scale"] = mase_scale
+    scale_df["n_obs"] = n_obs
+    scale_df["mase_valid"] = np.isfinite(mase_scale)
+    scale_df["mase_scale"] = mase_scale
     return scale_df
 
 
 def compute_metrics(sub: pd.DataFrame) -> dict:
     """sub는 mase_scale이 이미 merge된 panel/common의 부분집합이어야 한다(호출마다 merge하면
     build_metrics_table/source_breakdown/coldstart_aux 합쳐 수백 번 반복 merge가 발생한다)."""
-    actual = sub["actual"].to_numpy(dtype=float)
-    pred = sub["prediction"].to_numpy(dtype=float)
-    err = pred - actual
     n = len(sub)
-    denom = np.sum(actual)
+    if n == 0:
+        return {
+            "n": 0, "RMSE": np.nan, "MAE": np.nan, "WAPE": np.nan, "Bias(%)": np.nan, "MASE": np.nan,
+            "mase_valid_n": 0, "mase_excluded_n": 0, "mase_excluded_rate": np.nan,
+        }
 
-    rmse = float(np.sqrt(np.mean(err ** 2))) if n else np.nan
-    mae = float(np.mean(np.abs(err))) if n else np.nan
-    wape = float(np.sum(np.abs(err)) / denom * 100) if denom > 0 else np.nan
-    bias = float(np.sum(err) / denom * 100) if denom > 0 else np.nan
-
-    scale = sub["mase_scale"].to_numpy(dtype=float)
-    valid = np.isfinite(scale) & (scale > 0)
-    mase = float(np.mean(np.abs(err[valid]) / scale[valid])) if valid.any() else np.nan
-
+    m = ev.compute_metrics(sub["actual"], sub["prediction"], sub["mase_scale"])
+    mase_excluded_n = m["n"] - m["mase_n"]
     return {
-        "n": n, "RMSE": rmse, "MAE": mae, "WAPE": wape, "Bias(%)": bias, "MASE": mase,
-        "mase_valid_n": int(valid.sum()), "mase_excluded_n": int(n - valid.sum()),
-        "mase_excluded_rate": float((n - valid.sum()) / n) if n else np.nan,
+        "n": m["n"], "RMSE": m["rmse"], "MAE": m["mae"], "WAPE": m["wape"], "Bias(%)": m["bias"], "MASE": m["mase"],
+        "mase_valid_n": m["mase_n"], "mase_excluded_n": mase_excluded_n,
+        "mase_excluded_rate": mase_excluded_n / m["n"],
     }
 
 

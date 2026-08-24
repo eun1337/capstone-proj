@@ -1,11 +1,10 @@
 """
-statistical_utils.py
+common.py
 
 ARIMA/ARIMAX 통계모델 공통 유틸리티.
 
 auto_arima 탐색 설정, 최소 history 기준, 수렴·AICc 판정,
-log1p 예측값 역변환, cold-start fallback 및 실제값 조회 helper를 제공한다.
-모델 학습이나 forecast-origin별 실행 로직은 포함하지 않는다.
+log1p 역변환과 fallback helper를 제공한다.
 """
 
 import numpy as np
