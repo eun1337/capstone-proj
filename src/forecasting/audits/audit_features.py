@@ -1,16 +1,16 @@
 """
 audit_features.py
-Day3 RF/LightGBM Freeze된 30개 Feature Set의 dtype/NaN/Inf/target/qty 실데이터 audit.
-config.get_model_feature_cols()와 folds.generate_expanding_folds()를 그대로 사용하며
-전처리/encoding/학습은 하지 않는다.
+src.forecasting.common 기준 Freeze된 30개 Feature Set의 dtype/NaN/Inf/target/qty 실데이터
+audit. config.get_model_feature_cols()와 folds.generate_expanding_folds()를 그대로
+사용하며 전처리/encoding/학습은 하지 않는다.
 """
 
 import numpy as np
 import pandas as pd
 
-from src.ml.day3_rf_lightgbm.common import config as cfg
-from src.ml.day3_rf_lightgbm.common import folds as f
-from src.ml.day3_rf_lightgbm.common.data_loader import load_development
+from src.forecasting.common import config as cfg
+from src.forecasting.common import folds as f
+from src.forecasting.common.data_loader import load_development
 
 CATEGORICAL_COLS = list(cfg.CATEGORICAL_FEATURES)
 ALL_FEATURE_COLS = sorted(set().union(*(cfg.get_model_feature_cols(h) for h in cfg.HORIZONS)))

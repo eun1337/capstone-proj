@@ -3,9 +3,10 @@ dl_coverage_audit.py
 LSTM/TFT/Informer가 P10(A센터, validation_year=2022)의 모든 validation origin을
 horizon(1/2/4) x fold(Q1~Q4) x lookback(13/26) 조건에서 실제로 얼마나 커버하는지
 학습 없이 전수 확인하는 coverage audit. 모델/공통 코드는 전혀 수정하지 않고 기존
-production 경로(day3 common/folds, day4 common/sequence_builder·structural_nan·
-preprocessing, lstm/common dataset, tft/dataset_adapter, informer/dataset)를 그대로
-import해서 사용한다. 학습(optimizer/epoch/HPO)과 성능 비교는 하지 않는다.
+production 경로(src.forecasting.common.folds, src.forecasting.deep_learning.common의
+sequence_builder·structural_nan·preprocessing, lstm/common dataset, tft/dataset_adapter,
+informer/dataset)를 그대로 import해서 사용한다. 학습(optimizer/epoch/HPO)과 성능 비교는
+하지 않는다.
 
 expected origin은 fold generator의 train_mask/val_mask를 그대로 source of truth로
 쓴다(임의 날짜 재계산 금지). sequence_builder는 skip 이유를 별도로 저장하지 않으므로,
@@ -14,19 +15,18 @@ unresolved_nonfinite / other_unexpected)는 이 audit 스크립트 내부에서 
 history를 다시 대조해 재구성한다(production builder 자체는 변경하지 않음).
 """
 
-import sys
 import time
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from src.ml.day3_rf_lightgbm.common import folds as day3_folds
-from src.ml.day3_rf_lightgbm.common.config import TARGET_COLS
-from src.ml.day3_rf_lightgbm.common.data_loader import load_development
-from src.ml.day4_lstm_tft_informer.common.config import get_model_feature_roles
-from src.ml.day4_lstm_tft_informer.common.preprocessing import SequencePreprocessor
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import (
+from src.forecasting.common import folds as day3_folds
+from src.forecasting.common.config import TARGET_COLS
+from src.forecasting.common.data_loader import load_development
+from src.forecasting.deep_learning.common.config import get_model_feature_roles
+from src.forecasting.deep_learning.common.preprocessing import SequencePreprocessor
+from src.forecasting.deep_learning.common.sequence_builder import (
     CENTER_COL,
     SKU_COL,
     WEEK_COL,
@@ -34,12 +34,12 @@ from src.ml.day4_lstm_tft_informer.common.sequence_builder import (
     fold_origin_key_set,
     split_batch_by_origin_keys,
 )
-from src.ml.day4_lstm_tft_informer.common.structural_nan import (
+from src.forecasting.deep_learning.common.structural_nan import (
     apply_residual_nan_medians,
     fit_residual_nan_medians,
 )
-from src.ml.day4_lstm_tft_informer.informer.dataset import build_informer_tensors
-from src.ml.day4_lstm_tft_informer.tft.dataset_adapter import (
+from src.forecasting.deep_learning.informer.dataset import build_informer_tensors
+from src.forecasting.deep_learning.tft.dataset_adapter import (
     build_tft_long_dataframe,
     build_training_dataset,
     build_validation_dataset,

@@ -8,9 +8,9 @@ imputation이나 모델 학습은 하지 않는다.
 import numpy as np
 import pandas as pd
 
-from src.ml.day3_rf_lightgbm.common import config as cfg
-from src.ml.day3_rf_lightgbm.common import folds as f
-from src.ml.day3_rf_lightgbm.common.data_loader import load_development, load_holdout_2024
+from src.forecasting.common import config as cfg
+from src.forecasting.common import folds as f
+from src.forecasting.common.data_loader import load_development, load_holdout_2024
 
 NAN_FEATURES = (
     "adi_expanding_filled",
@@ -132,7 +132,7 @@ def summarize_median_gap(all_rows: pd.DataFrame) -> pd.DataFrame:
             "|소분류median - 전체median|_median": round(gap_sub_overall.median(), 4),
             "|소분류median - 전체median|_p75": round(gap_sub_overall.quantile(0.75), 4),
             "|소분류median - 대분류median|_median": round(gap_sub_large.median(), 4),
-            "전체median_값": round(usable["median_overall"].iloc[0], 4),
+            "전체median_값_median": round(usable["median_overall"].median(), 4),
         })
     return pd.DataFrame(rows)
 
@@ -178,7 +178,7 @@ def apply_hierarchical_median(df: pd.DataFrame, feature: str, maps: dict) -> tup
         resolved_at.loc[fillable] = level_key
 
     still_nan = values.isna()
-    if still_nan.any():
+    if still_nan.any() and np.isfinite(maps["overall"]):
         values.loc[still_nan] = maps["overall"]
         resolved_at.loc[still_nan] = "global"
 

@@ -4,8 +4,8 @@ RF / LSTM / TFT / Informer 4개 family가 동일한 실험 protocol(prediction k
 target 정의/transform, fold/purge, train-only preprocessing, inverse transform, evaluator,
 MASE, OOF schema, seed 전달, common evaluation key 적용 가능성)을 따르는지 검증한다.
 학습/HPO/성능비교는 하지 않는다. Mismatch가 발견돼도 이 스크립트는 production 코드를
-고치지 않고 findings만 보고한다. LightGBM은 미구현이므로 audit 대상에서 제외하고
-missing family로 FAIL 처리하지 않는다.
+고치지 않고 findings만 보고한다. LightGBM은 이 4-family base protocol audit 대상이 아니며,
+src.forecasting.audits.lightgbm_protocol_integration_audit.py에서 별도로 확장 검증한다.
 
 가능한 항목은 "내 기억"이 아니라 실제 production 모듈을 import해 함수/모듈 identity로
 직접 검증한다(같은 함수 객체를 참조하는지, 즉 진짜 같은 코드를 쓰는지).
@@ -17,24 +17,24 @@ import pandas as pd
 
 import inspect
 
-from src.ml.day3_rf_lightgbm.common import evaluator as ev_ref
-from src.ml.day3_rf_lightgbm.common import folds as folds_ref
-from src.ml.day3_rf_lightgbm.common import oof as oof_ref
-from src.ml.day3_rf_lightgbm.common.config import TARGET_COLS, HORIZONS
-from src.ml.day3_rf_lightgbm.common.data_loader import load_development
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import fold_origin_key_set
+from src.forecasting.common import evaluator as ev_ref
+from src.forecasting.common import folds as folds_ref
+from src.forecasting.common import oof as oof_ref
+from src.forecasting.common.config import TARGET_COLS, HORIZONS
+from src.forecasting.common.data_loader import load_development
+from src.forecasting.deep_learning.common.sequence_builder import fold_origin_key_set
 
-import src.ml.day3_rf_lightgbm.rf.benchmark_run_one as rf_bench
-import src.ml.day3_rf_lightgbm.rf.trainer as rf_trainer
-import src.ml.day3_rf_lightgbm.common.config as rf_cfg_ref
-import src.ml.day4_lstm_tft_informer.common.config as dl_cfg_ref
-import src.ml.day4_lstm_tft_informer.lstm.smoke_test as lstm_smoke
-import src.ml.day4_lstm_tft_informer.lstm.trainer as lstm_trainer
-import src.ml.day4_lstm_tft_informer.tft.dataset_adapter as tft_dataset_adapter
-import src.ml.day4_lstm_tft_informer.tft.smoke_test as tft_smoke
-import src.ml.day4_lstm_tft_informer.tft.trainer as tft_trainer
-import src.ml.day4_lstm_tft_informer.informer.smoke_test as informer_smoke
-import src.ml.day4_lstm_tft_informer.informer.trainer as informer_trainer
+import src.forecasting.pipeline.p13.rf as rf_runner
+import src.forecasting.machine_learning.rf.trainer as rf_trainer
+import src.forecasting.common.config as rf_cfg_ref
+import src.forecasting.deep_learning.common.config as dl_cfg_ref
+import src.forecasting.pipeline.p13.lstm as lstm_runner
+import src.forecasting.deep_learning.lstm.trainer as lstm_trainer
+import src.forecasting.deep_learning.tft.dataset_adapter as tft_dataset_adapter
+import src.forecasting.pipeline.p13.tft as tft_runner
+import src.forecasting.deep_learning.tft.trainer as tft_trainer
+import src.forecasting.pipeline.p13.informer as informer_runner
+import src.forecasting.deep_learning.informer.trainer as informer_trainer
 
 OUTPUT_DIR = Path("outputs/audits")
 PROTOCOL_CSV = OUTPUT_DIR / "four_family_protocol_audit.csv"
@@ -47,10 +47,10 @@ CONTRACT_MD = OUTPUT_DIR / "model_protocol_contract.md"
 FAMILIES = ("RF", "LSTM", "TFT", "Informer")
 
 DRIVER_MODULES = {
-    "RF": rf_bench,
-    "LSTM": lstm_smoke,
-    "TFT": tft_smoke,
-    "Informer": informer_smoke,
+    "RF": rf_runner,
+    "LSTM": lstm_runner,
+    "TFT": tft_runner,
+    "Informer": informer_runner,
 }
 TRAINER_MODULES = {
     "RF": rf_trainer,
@@ -67,13 +67,11 @@ def _is_same(obj_a, obj_b) -> bool:
 def audit_family(family: str) -> dict:
     driver = DRIVER_MODULES[family]
     trainer = TRAINER_MODULES[family]
-    notes = []
 
-    # --- fold_match / purge_match: 동일 day3 common/folds.generate_expanding_folds 참조 ---
-    fold_match = _is_same(getattr(driver, "day3_folds", getattr(driver, "f", None)), folds_ref) if hasattr(driver, "day3_folds") or hasattr(driver, "f") else False
+    # --- fold_match / purge_match: 동일 src.forecasting.common.folds.generate_expanding_folds 참조 ---
+    fold_match = _is_same(getattr(driver, "day3_folds", None), folds_ref) if hasattr(driver, "day3_folds") else False
     if fold_match:
-        gen_fn = (driver.day3_folds if hasattr(driver, "day3_folds") else driver.f).generate_expanding_folds
-        fold_match = gen_fn is folds_ref.generate_expanding_folds
+        fold_match = driver.day3_folds.generate_expanding_folds is folds_ref.generate_expanding_folds
     purge_match = fold_match  # purge(target_date < val_start)는 generate_expanding_folds 내부 로직이므로 함수 identity와 동치
 
     # --- evaluator_match / mase_match ---
@@ -85,9 +83,10 @@ def audit_family(family: str) -> dict:
     # --- oof_schema_match ---
     oof_schema_match = _is_same(trainer.oo, oof_ref) and (trainer.oo.build_oof_frame is oof_ref.build_oof_frame)
 
-    # --- target_match / horizon_match: RF는 day3 common.config.TARGET_COLS/HORIZONS를,
-    # DL 3개는 day4 common.config를 통해 "재정의가 아니라 재사용"하는 동일 객체를 참조하는지
-    # 직접 identity로 확인한다(값이 우연히 같은 게 아니라 진짜 같은 dict/tuple 객체인지) ---
+    # --- target_match / horizon_match: RF는 src.forecasting.common.config.TARGET_COLS/HORIZONS를,
+    # DL 3개는 src.forecasting.deep_learning.common.config를 통해 "재정의가 아니라 재사용"하는
+    # 동일 객체를 참조하는지 직접 identity로 확인한다(값이 우연히 같은 게 아니라 진짜 같은
+    # dict/tuple 객체인지) ---
     if family == "RF":
         target_match = rf_cfg_ref.TARGET_COLS is TARGET_COLS
         horizon_match = rf_cfg_ref.HORIZONS is HORIZONS
@@ -149,7 +148,6 @@ def audit_family(family: str) -> dict:
         "seed_compatible": seed_compatible,
         "common_eval_compatible": common_eval_compatible,
         "protocol_pass": protocol_pass,
-        "notes": "; ".join(notes) if notes else "",
     }
 
 
@@ -254,9 +252,9 @@ def write_contract_md(protocol_df: pd.DataFrame, summary_df: pd.DataFrame, regre
     )
     protocol_pass_all = bool(protocol_df["protocol_pass"].all())
 
-    content = f"""# Model Protocol Contract (RF / LSTM / TFT / Informer, LightGBM 향후 integration 대상)
+    content = f"""# Model Protocol Contract (RF / LSTM / TFT / Informer, LightGBM은 lightgbm_protocol_integration_audit.py에서 별도 검증)
 
-이 문서는 `src/ml/audits/four_family_protocol_audit.py` 실행 결과를 근거로 하며, 실행할
+이 문서는 `src/forecasting/audits/four_family_protocol_audit.py` 실행 결과를 근거로 하며, 실행할
 때마다 이 스크립트가 재생성한다(수기로 편집한 내용은 다음 실행 시 덮어써진다). 4개
 family(RF/LSTM/TFT/Informer) 모두 아래 protocol을 **동일하게** 따르는 것이 코드
 identity(같은 함수/모듈 객체 참조) 기준으로 확인되었다 (`four_family_protocol_audit.csv`
@@ -266,8 +264,8 @@ identity(같은 함수/모듈 객체 참조) 기준으로 확인되었다 (`four
 
 | 항목 | 공유 방식 | 근거 |
 |---|---|---|
-| Prediction key | `(center_id, sku_id, week_st, target_date)` | 4개 family 모두 `day3_rf_lightgbm.common.oof.build_oof_frame`을 **동일 함수 객체**로 호출 |
-| Horizon | h1/h2/h4, 각각 독립 direct model (재귀 예측 없음) | `HORIZONS=(1,2,4)` 객체 identity 동일(day4 common이 day3 config를 재정의 없이 재사용), 각 trainer가 horizon 1개당 스칼라 target 1개만 다룸 |
+| Prediction key | `(center_id, sku_id, week_st, target_date)` | 4개 family 모두 `src.forecasting.common.oof.build_oof_frame`을 **동일 함수 객체**로 호출 |
+| Horizon | h1/h2/h4, 각각 독립 direct model (재귀 예측 없음) | `HORIZONS=(1,2,4)` 객체 identity 동일(`src.forecasting.deep_learning.common` config가 `src.forecasting.common` config를 재정의 없이 재사용), 각 trainer가 horizon 1개당 스칼라 target 1개만 다룸 |
 | Target 정의 | raw `target_h1/h2/h4` | `TARGET_COLS` 객체 identity 동일 |
 | Target transform | `log1p(raw target)` 학습 → `pred_log` → `expm1` → `clip(lower=0)` | 정방향은 각 family 소스에 `log1p` 존재(TFT는 `tft/dataset_adapter.py`에서 수행), 역방향은 4개 family 전부 `common.evaluator.inverse_transform_prediction`을 **동일 함수 객체**로 호출 |
 | Fold 정의 (P10/P13) | A센터, Q1~Q4 expanding 4-fold, target_date 기준 purge | 4개 family 모두 `common.folds.generate_expanding_folds`를 **동일 함수 객체**로 호출 |
@@ -288,7 +286,6 @@ identity(같은 함수/모듈 객체 참조) 기준으로 확인되었다 (`four
 ## 3. 저위험 notes (수정 후보이나 protocol_pass에는 영향 없음)
 
 1. **RF trainer에 NaN target 명시적 가드 없음** - 이번 실측(§4)에서 12개 horizon×fold 전부 `rf_eligible_origins == expected_val_origins`로 target NaN 0건 확인되어 현재 데이터 범위에서 실제 문제 아님.
-2. **RF 전용 persistent smoke test 파일 없음** - LSTM/TFT/Informer는 `smoke_test.py`가 있으나 RF는 `benchmark_run_one.py`(compute feasibility 목적)만 있음.
 
 ## 4. P10 Common Evaluation Key (실제 key-set intersection, 매 실행마다 재계산)
 
@@ -308,10 +305,12 @@ production sequence_builder 경로로 생성됨)를 재사용하고, RF eligible
 - common evaluation key duplicate: {regression_info['duplicate_count']}건
 - 실제 common key 총 행 수: {regression_info['common_key_rows']:,} (`outputs/audits/common_evaluation_keys.csv`, `.parquet`에 horizon/fold/center_id/sku_id/week_st/target_date로 저장, 향후 HPO/OOF 평가에서 재사용 가능. native coverage는 삭제하지 않고 `rf_eligible_origins`/`dl_lb13_eligible_origins`/`dl_lb26_eligible_origins` 컬럼으로 항상 함께 보존)
 
-## 5. LightGBM Integration Contract (향후 구현 시 반드시 만족)
+## 5. LightGBM Integration Contract
 
-LightGBM이 구현되면 아래 12개 항목을 만족해야 하며, 만족 여부는
-`src.ml.day3_rf_lightgbm.common` 모듈들과의 **identity 비교**로 재검증할 수 있다:
+LightGBM은 아래 12개 항목을 만족해야 하며, 만족 여부는 `src.forecasting.common` 모듈들과의
+**identity 비교**로 검증한다. 실제 검증 결과는 이 스크립트가 아니라
+`src.forecasting.audits.lightgbm_protocol_integration_audit.py`(별도 파일, 별도 CSV/JSON
+저장)에서 확인한다:
 
 1. Prediction key `(center_id, sku_id, week_st, target_date)` 동일
 2. h1/h2/h4 raw target(`target_h1/h2/h4`) 동일, 재귀 예측 금지
@@ -326,8 +325,9 @@ LightGBM이 구현되면 아래 12개 항목을 만족해야 하며, 만족 여�
 11. trainer 함수가 `seed`를 명시적 파라미터로 받음
 12. 이 스크립트의 `build_common_evaluation_keys()` 방식으로 LightGBM eligible key를 계산해 기존 4-family와 실제 key-set intersection이 가능해야 함(원본 row를 임의로 채우거나 native coverage를 숨기지 않음)
 
-LightGBM이 들어오면 4-family audit을 처음부터 다시 하지 않고, 위 12개 항목만 검증하는
-"LightGBM vs Frozen Common Protocol" integration audit만 추가로 수행한다.
+LightGBM의 4-family base protocol 대비 확장 검증은 4-family audit을 처음부터 다시 하지 않고,
+위 12개 항목을 중심으로 하는 "LightGBM vs Frozen Common Protocol" integration audit
+(`lightgbm_protocol_integration_audit.py`)에서 별도로 수행한다.
 """
     CONTRACT_MD.write_text(content, encoding="utf-8")
 
