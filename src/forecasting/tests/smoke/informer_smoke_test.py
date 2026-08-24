@@ -1,10 +1,10 @@
 """
-smoke_test.py
+informer_smoke_test.py
 Informer functional smoke test.
-1) 학습 없는 6개 조합(h1/h2/h4 x lookback 13/26) decoder/alignment audit
-2) 아키텍처 assertion(d_model/d_ff/d_layers/dropout/factor/e_layers/n_heads/ProbSparse/
-   distilling/decoder attention 구성/output shape)
-3) 대표 end-to-end smoke(A센터, P10 h1 Fold1, 80 SKU, lookback=13, e_layers=2, n_heads=8)
+1) 학습 없는 3개 조합(h1/h2/h4, lookback=13 고정) decoder/alignment audit
+2) 아키텍처 assertion(구조·attention 구성 확인)
+2-1) n_heads {8,16} 2개 조합 forward+backward sanity(e_layers/lookback 고정)
+3) 대표 end-to-end smoke(A센터, P10 h1 Fold1, 80 SKU)
 성능값은 Search Space 판단에 쓰지 않는다.
 """
 
@@ -16,29 +16,33 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-from src.ml.day3_rf_lightgbm.common import folds as day3_folds
-from src.ml.day3_rf_lightgbm.common import oof as day3_oof
-from src.ml.day3_rf_lightgbm.common.config import HOLIDAY_FEATURES
-from src.ml.day3_rf_lightgbm.common.data_loader import load_development
-from src.ml.day4_lstm_tft_informer.common.config import get_model_feature_roles
-from src.ml.day4_lstm_tft_informer.common.preprocessing import SequencePreprocessor
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import (
+from src.forecasting.common import folds
+from src.forecasting.common import oof
+from src.forecasting.common.config import HOLIDAY_FEATURES
+from src.forecasting.common.data_loader import load_development
+from src.forecasting.deep_learning.common.config import get_model_feature_roles
+from src.forecasting.deep_learning.common.preprocessing import SequencePreprocessor
+from src.forecasting.deep_learning.common.sequence_builder import (
     build_sequences,
     fold_origin_key_set,
     split_batch_by_origin_keys,
 )
-from src.ml.day4_lstm_tft_informer.common.structural_nan import (
+from src.forecasting.deep_learning.common.structural_nan import (
     RESIDUAL_NAN_FEATURES,
     apply_residual_nan_medians,
     fit_residual_nan_medians,
 )
-from src.ml.day4_lstm_tft_informer.informer.config import (
+from src.forecasting.deep_learning.informer.config import (
     D_FF,
     D_LAYERS,
     D_MODEL,
     DROPOUT,
+    E_LAYERS,
     FACTOR,
     LEARNING_RATE,
+    LOOKBACK,
+    LOOKBACK_CHOICES,
+    N_HEADS_CHOICES,
     SMOKE_E_LAYERS,
     SMOKE_EPOCHS,
     SMOKE_N_HEADS,
@@ -46,14 +50,13 @@ from src.ml.day4_lstm_tft_informer.informer.config import (
     distilled_encoder_length,
     label_len_for,
 )
-from src.ml.day4_lstm_tft_informer.informer.dataset import (
-    InformerSequenceDataset,
+from src.forecasting.deep_learning.informer.dataset import (
     build_decoder_future_known,
     build_informer_tensors,
 )
-from src.ml.day4_lstm_tft_informer.informer.layers import FullAttention, ProbAttention
-from src.ml.day4_lstm_tft_informer.informer.model import InformerForecaster
-from src.ml.day4_lstm_tft_informer.informer.trainer import train_and_evaluate_fold
+from src.forecasting.deep_learning.informer.layers import FullAttention, ProbAttention
+from src.forecasting.deep_learning.informer.model import InformerForecaster
+from src.forecasting.deep_learning.informer.trainer import train_and_evaluate_fold
 
 N_SKUS = 80
 SMOKE_BATCH_SIZE = 32
@@ -63,10 +66,11 @@ SMOKE_LOOKBACK = 13
 
 def build_smoke_subset(horizon: int):
     dev = load_development()
-    fold = day3_folds.generate_expanding_folds(dev, 2022, horizon)[0]  # P10 Fold1
+    sub_a = dev[dev["center_id"] == "A"].copy()
+    fold = folds.generate_expanding_folds(sub_a, 2022, horizon)[0]  # P10 Fold1
 
-    candidate_skus = sorted(dev.loc[fold["train_mask"] | fold["val_mask"], "sku_id"].unique())[:N_SKUS]
-    sub = dev[(dev["center_id"] == "A") & (dev["sku_id"].isin(candidate_skus))].copy()
+    candidate_skus = sorted(sub_a.loc[fold["train_mask"] | fold["val_mask"], "sku_id"].unique())[:N_SKUS]
+    sub = sub_a[sub_a["sku_id"].isin(candidate_skus)].copy()
 
     sub_fold = {
         "fold": fold["fold"],
@@ -78,13 +82,13 @@ def build_smoke_subset(horizon: int):
 
 
 # ---------------------------------------------------------------------------
-# 1) 학습 없는 6개 조합 alignment audit
+# 1) 학습 없는 3개 조합(h1/h2/h4 x lookback=13 고정) alignment audit
 # ---------------------------------------------------------------------------
 def run_alignment_audit() -> pd.DataFrame:
     results = []
     for h in [1, 2, 4]:
         sub, sub_fold = build_smoke_subset(h)
-        for lookback in [13, 26]:
+        for lookback in LOOKBACK_CHOICES:  # 현재 P13 frozen: lookback=13 고정(singleton)
             checks = {}
 
             maps = fit_residual_nan_medians(sub.loc[sub_fold["train_mask"]])
@@ -101,7 +105,7 @@ def run_alignment_audit() -> pd.DataFrame:
             checks["tensor NaN/Inf==0 (val)"] = bool(np.isfinite(val_batch.time_varying).all())
 
             # target_h{h} alignment
-            from src.ml.day3_rf_lightgbm.common.config import TARGET_COLS
+            from src.forecasting.common.config import TARGET_COLS
             target_col = TARGET_COLS[h]
             dev_target = sub.set_index(["center_id", "sku_id", "week_st"])[target_col]
             sample_idx = full_batch.keys.sample(min(20, len(full_batch.keys)), random_state=0).index
@@ -135,10 +139,7 @@ def run_alignment_audit() -> pd.DataFrame:
             expected_label_len = lookback // 2
             checks["label_len 정확"] = label_len_for(lookback) == expected_label_len
 
-            # train-only scaling/vocab: 단일 preprocessor 인스턴스가 train에서만 fit되고
-            # val은 transform만 하는지(재fit 여부는 SequencePreprocessor 자체가 fit()을
-            # 명시적으로 한 번만 호출하는 구조로 이미 보장됨 - 여기서는 fit 호출 순서를
-            # 실제로 지켜 만든 preprocessor로 val을 transform해도 오류 없이 동작하는지 확인)
+            # train-only scaling/vocab: preprocessor를 train에서만 fit하고 val은 transform만 함
             preprocessor = SequencePreprocessor().fit(train_batch)
             train_tensors = build_informer_tensors(preprocessor, train_batch, sub_imputed, h)
             val_tensors = build_informer_tensors(preprocessor, val_batch, sub_imputed, h)
@@ -217,8 +218,8 @@ def run_architecture_assertions(e_layers: int, n_heads: int, lookback: int) -> d
 
     checks["d_model==512"] = model.d_model == 512 == D_MODEL
     checks["d_ff==2048"] = D_FF == 2048
-    checks["d_layers==2"] = len(model.decoder.layers) == 2 == D_LAYERS
-    checks["dropout==0.1"] = DROPOUT == 0.1
+    checks["d_layers==1(현재 P13 frozen, config.D_LAYERS와 일치)"] = len(model.decoder.layers) == 1 == D_LAYERS
+    checks["dropout==0.05(현재 P13 frozen, config.DROPOUT과 일치)"] = DROPOUT == 0.05
     checks["factor==5"] = FACTOR == 5
     checks["encoder layer count==e_layers"] = len(model.encoder.layers) == e_layers
     checks["n_heads==지정값"] = model.n_heads == n_heads
@@ -245,12 +246,10 @@ def run_architecture_assertions(e_layers: int, n_heads: int, lookback: int) -> d
     out = model(encoder_input, decoder_value, decoder_known, static_cont, static_cat)
     checks["output shape==[batch]"] = tuple(out.shape) == (batch_size,)
 
-    encoder_lengths = []
     x = model.encoder_input_proj(encoder_input)
     x = x + model.pos_encoding(x)
     for i, layer in enumerate(model.encoder.layers):
         x = layer(x)
-        encoder_lengths.append(x.shape[1])
         if i < len(model.encoder.conv_layers):
             x = model.encoder.conv_layers[i](x)
     expected_final_len = distilled_encoder_length(lookback, e_layers)
@@ -259,65 +258,62 @@ def run_architecture_assertions(e_layers: int, n_heads: int, lookback: int) -> d
     return checks
 
 
-def run_16_architecture_sanity() -> pd.DataFrame:
-    """e_layers x n_heads x lookback 16개 조합 전부에서 실제 forward+backward 1스텝을
-    돌려 loss/gradient finite와 output shape, distilled encoder 최종 길이>0을 확인한다.
-    HPO 범위/architecture는 변경하지 않는다(현재 확정된 3축 그대로 순회만 함)."""
-    from src.ml.day4_lstm_tft_informer.informer.config import E_LAYERS_CHOICES, N_HEADS_CHOICES, LOOKBACK_CHOICES
-
+def run_n_heads_architecture_sanity() -> pd.DataFrame:
+    """n_heads {8,16} 2개 조합에서 forward+backward 1스텝 loss/gradient finite를 확인한다.
+    e_layers/lookback은 현재 P13 frozen 값(config.E_LAYERS, config.LOOKBACK)으로 고정한다."""
+    e_layers = E_LAYERS
+    lookback = LOOKBACK
     n_tv, n_known, static_cont_dim = 21, 7, 3
     cat_vocab_sizes = [4, 4, 4]
     batch_size = 4
     results = []
 
-    for e_layers in E_LAYERS_CHOICES:
-        for n_heads in N_HEADS_CHOICES:
-            for lookback in LOOKBACK_CHOICES:
-                label_len = label_len_for(lookback)
-                torch.manual_seed(0)
-                model = InformerForecaster(
-                    n_time_varying=n_tv, n_known=n_known, static_cont_dim=static_cont_dim,
-                    cat_vocab_sizes=cat_vocab_sizes, e_layers=e_layers, n_heads=n_heads,
-                    d_model=D_MODEL, d_ff=D_FF, d_layers=D_LAYERS, factor=FACTOR, dropout=DROPOUT,
-                )
-                encoder_input = torch.randn(batch_size, lookback, n_tv)
-                decoder_value = torch.randn(batch_size, label_len + 1)
-                decoder_known = torch.randn(batch_size, label_len + 1, n_known)
-                static_cont = torch.randn(batch_size, static_cont_dim)
-                static_cat = torch.zeros(batch_size, len(cat_vocab_sizes), dtype=torch.long)
-                y_log = torch.randn(batch_size)
+    for n_heads in N_HEADS_CHOICES:
+        label_len = label_len_for(lookback)
+        torch.manual_seed(0)
+        model = InformerForecaster(
+            n_time_varying=n_tv, n_known=n_known, static_cont_dim=static_cont_dim,
+            cat_vocab_sizes=cat_vocab_sizes, e_layers=e_layers, n_heads=n_heads,
+            d_model=D_MODEL, d_ff=D_FF, d_layers=D_LAYERS, factor=FACTOR, dropout=DROPOUT,
+        )
+        encoder_input = torch.randn(batch_size, lookback, n_tv)
+        decoder_value = torch.randn(batch_size, label_len + 1)
+        decoder_known = torch.randn(batch_size, label_len + 1, n_known)
+        static_cont = torch.randn(batch_size, static_cont_dim)
+        static_cat = torch.zeros(batch_size, len(cat_vocab_sizes), dtype=torch.long)
+        y_log = torch.randn(batch_size)
 
-                row = {"e_layers": e_layers, "n_heads": n_heads, "lookback": lookback}
-                try:
-                    out = model(encoder_input, decoder_value, decoder_known, static_cont, static_cat)
-                    row["forward 성공"] = True
-                    row["output shape==[batch]"] = tuple(out.shape) == (batch_size,)
+        row = {"e_layers": e_layers, "n_heads": n_heads, "lookback": lookback}
+        try:
+            out = model(encoder_input, decoder_value, decoder_known, static_cont, static_cat)
+            row["forward 성공"] = True
+            row["output shape==[batch]"] = tuple(out.shape) == (batch_size,)
 
-                    loss = nn.MSELoss()(out, y_log)
-                    row["loss finite"] = bool(torch.isfinite(loss).all())
+            loss = nn.MSELoss()(out, y_log)
+            row["loss finite"] = bool(torch.isfinite(loss).all())
 
-                    loss.backward()
-                    row["backward 성공"] = True
-                    row["gradients finite"] = all(
-                        torch.isfinite(p.grad).all().item() for p in model.parameters() if p.grad is not None
-                    )
-                except Exception as e:
-                    row["forward 성공"] = row.get("forward 성공", False)
-                    row["backward 성공"] = row.get("backward 성공", False)
-                    row["loss finite"] = row.get("loss finite", False)
-                    row["gradients finite"] = row.get("gradients finite", False)
-                    row["output shape==[batch]"] = row.get("output shape==[batch]", False)
-                    row["error"] = str(e)
+            loss.backward()
+            row["backward 성공"] = True
+            row["gradients finite"] = all(
+                torch.isfinite(p.grad).all().item() for p in model.parameters() if p.grad is not None
+            )
+        except Exception as e:
+            row["forward 성공"] = row.get("forward 성공", False)
+            row["backward 성공"] = row.get("backward 성공", False)
+            row["loss finite"] = row.get("loss finite", False)
+            row["gradients finite"] = row.get("gradients finite", False)
+            row["output shape==[batch]"] = row.get("output shape==[batch]", False)
+            row["error"] = str(e)
 
-                final_len = distilled_encoder_length(lookback, e_layers)
-                row["distilled encoder 최종 길이>0"] = final_len > 0
+        final_len = distilled_encoder_length(lookback, e_layers)
+        row["distilled encoder 최종 길이>0"] = final_len > 0
 
-                n_fail = sum(
-                    1 for k, v in row.items()
-                    if k not in ("e_layers", "n_heads", "lookback", "error") and not v
-                )
-                row["n_fail"] = n_fail
-                results.append(row)
+        n_fail = sum(
+            1 for k, v in row.items()
+            if k not in ("e_layers", "n_heads", "lookback", "error") and not v
+        )
+        row["n_fail"] = n_fail
+        results.append(row)
 
     return pd.DataFrame(results)
 
@@ -332,7 +328,7 @@ def main() -> None:
         checks.append((name, bool(cond)))
 
     print("=" * 100)
-    print("[1] 학습 없는 6개 조합(h1/h2/h4 x lookback 13/26) alignment audit")
+    print("[1] 학습 없는 3개 조합(h1/h2/h4 x lookback=13 고정) alignment audit")
     print("=" * 100)
     audit_df = run_alignment_audit()
     pd.set_option("display.width", 240)
@@ -340,8 +336,8 @@ def main() -> None:
     print(audit_df.to_string(index=False))
     n_audit_fail = int((audit_df["n_fail"] > 0).sum())
     print()
-    print(f"6개 조합 중 FAIL 있는 조합 수: {n_audit_fail} / {len(audit_df)}")
-    check("6개 조합 alignment audit 전부 PASS", n_audit_fail == 0)
+    print(f"{len(audit_df)}개 조합 중 FAIL 있는 조합 수: {n_audit_fail} / {len(audit_df)}")
+    check(f"{len(audit_df)}개 조합 alignment audit 전부 PASS", n_audit_fail == 0)
 
     print()
     print("=" * 100)
@@ -354,14 +350,14 @@ def main() -> None:
 
     print()
     print("=" * 100)
-    print("[2-1] 16개 architecture sanity (e_layers x n_heads x lookback, forward+backward)")
+    print("[2-1] n_heads {8,16} architecture sanity (e_layers/lookback 고정, forward+backward)")
     print("=" * 100)
-    sanity_df = run_16_architecture_sanity()
+    sanity_df = run_n_heads_architecture_sanity()
     print(sanity_df.to_string(index=False))
     n_sanity_fail = int((sanity_df["n_fail"] > 0).sum())
     print()
-    print(f"16개 조합 중 FAIL 있는 조합 수: {n_sanity_fail} / {len(sanity_df)}")
-    check("16개 architecture sanity 전부 PASS", n_sanity_fail == 0)
+    print(f"{len(sanity_df)}개 조합 중 FAIL 있는 조합 수: {n_sanity_fail} / {len(sanity_df)}")
+    check(f"n_heads architecture sanity 전부 PASS ({len(sanity_df)}개 조합)", n_sanity_fail == 0)
 
     print()
     print("=" * 100)
@@ -391,9 +387,8 @@ def main() -> None:
             training_finite_error = str(e)
             result = None
 
-        # trainer.py는 매 batch loss/gradient가 NaN/Inf면 즉시 FloatingPointError를
-        # 던진다(fail-fast). 여기서 예외 없이 끝났다면 학습 전 구간에서 loss/gradient가
-        # 전부 finite였다는 뜻이다.
+        # trainer는 loss/gradient가 NaN/Inf면 즉시 FloatingPointError(fail-fast)를 던지므로,
+        # 예외 없음 == 전 구간 finite
         check("training loss finite (전 batch, fail-fast 미발생)", training_finite_error is None)
         check("training gradients finite (전 batch, fail-fast 미발생)", training_finite_error is None)
         if training_finite_error is not None:
@@ -420,7 +415,7 @@ def main() -> None:
 
         state_dict = torch.load(checkpoint_path, map_location="cpu")
         weights_finite = all(torch.isfinite(t).all().item() for t in state_dict.values())
-        check("best checkpoint weights finite (NaN/Inf 폭주 없음)", weights_finite)
+        check("checkpoint weights finite (NaN/Inf 폭주 없음)", weights_finite)
 
         pred_finite = np.isfinite(result["oof"]["y_pred"]).all()
         check("prediction finite", bool(pred_finite))
@@ -431,7 +426,7 @@ def main() -> None:
         check("evaluator 계산 PASS", all(np.isfinite(m[k]) for k in ["wape", "bias", "rmse", "mae"]))
 
         try:
-            day3_oof.validate_oof_frame(result["oof"])
+            oof.validate_oof_frame(result["oof"])
             oof_valid = True
         except Exception:
             oof_valid = False
@@ -445,8 +440,8 @@ def main() -> None:
               f"preprocessing={result['preprocessing_time_sec']:.2f}s "
               f"train={result['train_time_sec']:.2f}s predict={result['predict_time_sec']:.2f}s "
               f"total={result['total_time_sec']:.2f}s")
-        print(f"epochs_completed={result['epochs_completed']} best_epoch={result['best_epoch']} "
-              f"best_val_loss={result['best_val_loss']:.4f}")
+        print(f"epochs_completed={result['epochs_completed']} final_epoch={result['final_epoch']} "
+              f"final_val_loss={result['final_val_loss']:.4f}")
         print(f"device={result['device']} seed={result['seed']} "
               f"peak_ram_mb={result['peak_ram_mb']:.1f} "
               f"device_memory_mb={result['device_memory_mb']} ({result['device_memory_metric']})")

@@ -1,9 +1,10 @@
 """
 layers.py
-Informer(Zhou et al., 2021) 핵심 구성요소의 local 구현. ProbSparse self-attention,
-encoder distilling(Conv1d+ELU+MaxPool), full attention(decoder cross-attention),
-encoder/decoder layer, positional encoding을 포함한다. vanilla nn.Transformer로
-대체하지 않는다.
+
+Informer 핵심 attention 및 encoder/decoder layer 구현.
+
+ProbSparse self-attention, encoder distilling, decoder full cross-attention,
+multi-head projection과 positional encoding을 제공한다.
 """
 
 import math
@@ -30,11 +31,7 @@ class PositionalEmbedding(nn.Module):
 
 
 class ProbAttention(nn.Module):
-    """원논문 ProbSparse self-attention. 전체 query 중 sparsity measurement
-    M(q_i) = max_j(q_i k_j^T/sqrt(d)) - mean_j(q_i k_j^T/sqrt(d))가 큰 상위
-    u = min(factor*ceil(ln(L_Q)), L_Q)개 query에 대해서만 실제 softmax attention을
-    계산하고, 나머지 query에는 (mask_flag일 때 누적평균, 아니면 V의 평균)을
-    context로 채운다."""
+    """Informer ProbSparse self-attention."""
 
     def __init__(self, mask_flag: bool, factor: int = 5, dropout: float = 0.1):
         super().__init__()
@@ -111,9 +108,7 @@ class ProbAttention(nn.Module):
 
 
 class FullAttention(nn.Module):
-    """decoder cross-attention용 표준(canonical) scaled dot-product attention.
-    원논문도 encoder-decoder cross-attention에는 ProbSparse가 아닌 full attention을
-    사용한다(질의 sparsity 가정이 encoder 자기-어텐션에만 적용됨)."""
+    """decoder cross-attention에 사용하는 scaled dot-product attention."""
 
     def __init__(self, dropout: float = 0.1):
         super().__init__()
@@ -131,8 +126,7 @@ class FullAttention(nn.Module):
 
 
 class AttentionLayer(nn.Module):
-    """Q/K/V/Out projection을 감싸는 multi-head wrapper. inner_attention으로
-    ProbAttention 또는 FullAttention을 주입받는다."""
+    """attention 연산에 Q/K/V projection을 적용하는 multi-head wrapper."""
 
     def __init__(self, inner_attention: nn.Module, d_model: int, n_heads: int):
         super().__init__()
@@ -199,8 +193,7 @@ class EncoderLayer(nn.Module):
 
 
 class Encoder(nn.Module):
-    """e_layers개 EncoderLayer 사이에 distilling ConvLayer를 (e_layers-1)개 둔다.
-    마지막 encoder layer 뒤에는 distilling이 없다."""
+    """EncoderLayer 사이에 distilling ConvLayer를 적용하는 Informer encoder."""
 
     def __init__(self, e_layers: int, d_model: int, n_heads: int, d_ff: int, factor: int, dropout: float):
         super().__init__()

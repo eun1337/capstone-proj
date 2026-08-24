@@ -1,22 +1,18 @@
 """
 model.py
-Informer forecaster. encoder는 scaled 21개 time-varying feature 시퀀스를 받아
-input projection(Linear 21->d_model) + positional encoding + static context를 더한 뒤
-ProbSparse self-attention + distilling encoder layer를 통과한다. decoder는
-(label_len개 과거 + 1개 future placeholder) 길이의 decoder_value/decoder_known 토큰을
-각각 projection해 더하고 masked ProbSparse self-attention + encoder-decoder
-cross-attention을 통과한다. 마지막 decoder timestep(=forecast origin+horizon 위치)만
-Linear(d_model, 1)로 사영해 pred_log를 낸다. static context(embedding+continuous)는
-project-specific deterministic adaptation으로 encoder/decoder 모든 timestep에
-broadcast-add되며 별도 hidden MLP head는 두지 않는다. Direct h1/h2/h4는 horizon마다
-별도로 학습된 모델 인스턴스로 지원한다.
+
+Informer 예측 모델.
+
+time-varying sequence를 ProbSparse encoder로 처리하고,
+known/value decoder 입력과 cross-attention을 이용해 horizon별 log1p 수요를 예측한다.
+static categorical/continuous context는 encoder와 decoder의 모든 timestep에 함께 반영한다.
 """
 
 import torch
 import torch.nn as nn
 
-from src.ml.day4_lstm_tft_informer.common.embedding_utils import get_embedding_size
-from src.ml.day4_lstm_tft_informer.informer.layers import Decoder, Encoder, PositionalEmbedding
+from src.forecasting.deep_learning.common.embedding_utils import get_embedding_size
+from src.forecasting.deep_learning.informer.layers import Decoder, Encoder, PositionalEmbedding
 
 
 class InformerForecaster(nn.Module):
@@ -63,13 +59,13 @@ class InformerForecaster(nn.Module):
 
     def forward(
         self,
-        encoder_input: torch.Tensor,   # (B, lookback, n_time_varying)
-        decoder_value: torch.Tensor,   # (B, label_len+1)
-        decoder_known: torch.Tensor,   # (B, label_len+1, n_known)
-        static_cont: torch.Tensor,     # (B, static_cont_dim)
-        static_cat: torch.Tensor,      # (B, n_static_cat)
+        encoder_input: torch.Tensor,   
+        decoder_value: torch.Tensor,   
+        decoder_known: torch.Tensor,   
+        static_cont: torch.Tensor,     
+        static_cat: torch.Tensor,      
     ) -> torch.Tensor:
-        static_context = self._static_context(static_cont, static_cat)  # (B, d_model)
+        static_context = self._static_context(static_cont, static_cat)  
 
         enc_emb = self.encoder_input_proj(encoder_input)
         enc_emb = enc_emb + self.pos_encoding(enc_emb) + static_context.unsqueeze(1)
@@ -81,5 +77,5 @@ class InformerForecaster(nn.Module):
         dec_emb = self.dropout(dec_emb)
         dec_out = self.decoder(dec_emb, enc_out)
 
-        pred_log = self.output_layer(dec_out[:, -1, :]).squeeze(-1)  # (B,)
+        pred_log = self.output_layer(dec_out[:, -1, :]).squeeze(-1)  
         return pred_log

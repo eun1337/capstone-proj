@@ -1,11 +1,11 @@
 """
 trainer.py
-Informer 1-fold 학습/평가. fold TRAIN으로 adi/cv2 residual NaN 계층형 median을 fit해
-전체 history에 적용한 뒤 시퀀스를 만들고, common/preprocessing(SequencePreprocessor)로
-train-only scaling/vocab을 fit, informer/dataset.py로 encoder/decoder 텐서를 만들어
-InformerForecaster를 학습·평가한다. day3 common/evaluator, common/oof를 재사용해
-metrics/OOF/시간/체크포인트 기록을 반환한다. e_layers/n_heads/lookback은 호출부가
-정하는 HPO 축이며, 그 외 구조/optimizer/loss는 informer/config.py의 fixed 값을 쓴다.
+
+Informer 학습/평가.
+
+fold train으로 residual NaN 처리와 전처리를 fit한 뒤 encoder/decoder 입력을 구성해
+한 CV fold의 학습·평가와 OOF 생성을 수행한다. P13은 n_heads만 탐색하며,
+EarlyStopping 없이 max_epochs를 모두 학습한 마지막 epoch 모델을 평가한다.
 """
 
 import random
@@ -18,30 +18,28 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from src.ml.day3_rf_lightgbm.common import evaluator as ev
-from src.ml.day3_rf_lightgbm.common import oof as oo
-from src.ml.day4_lstm_tft_informer.common.preprocessing import SequencePreprocessor
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import (
+from src.forecasting.common import evaluator as ev
+from src.forecasting.common import oof as oo
+from src.forecasting.deep_learning.common.preprocessing import SequencePreprocessor
+from src.forecasting.deep_learning.common.sequence_builder import (
     build_sequences,
     fold_origin_key_set,
     split_batch_by_origin_keys,
 )
-from src.ml.day4_lstm_tft_informer.common.structural_nan import (
+from src.forecasting.deep_learning.common.structural_nan import (
     apply_residual_nan_medians,
     fit_residual_nan_medians,
 )
-from src.ml.day4_lstm_tft_informer.informer.config import (
+from src.forecasting.deep_learning.informer.config import (
     D_FF,
     D_LAYERS,
     D_MODEL,
     DROPOUT,
-    EARLY_STOPPING_MIN_DELTA,
-    EARLY_STOPPING_PATIENCE,
     FACTOR,
     label_len_for,
 )
-from src.ml.day4_lstm_tft_informer.informer.dataset import InformerSequenceDataset, build_informer_tensors
-from src.ml.day4_lstm_tft_informer.informer.model import InformerForecaster
+from src.forecasting.deep_learning.informer.dataset import InformerSequenceDataset, build_informer_tensors
+from src.forecasting.deep_learning.informer.model import InformerForecaster
 
 
 def select_device() -> str:
@@ -66,8 +64,7 @@ def _peak_ram_mb() -> float:
 
 
 def _device_memory_mb(device: str) -> tuple:
-    """CUDA는 실제 peak(max_memory_allocated), MPS는 peak 추적 API가 없어
-    current_allocated_memory(호출 시점 값, peak 아님)만 제공한다."""
+    """CUDA peak 또는 MPS 현재 할당 메모리와 해당 지표명을 반환한다."""
     try:
         if device == "cuda":
             return torch.cuda.max_memory_allocated() / (1024 * 1024), "cuda_max_memory_allocated_mb"
@@ -79,8 +76,7 @@ def _device_memory_mb(device: str) -> tuple:
 
 
 def _run_epoch_predict(model, loader, device, n_total):
-    """idx를 이용해 원본 batch 순서로 재정렬한 pred_log(N,)를 반환한다.
-    DataLoader/모델 출력 순서를 암묵적으로 가정하지 않는다."""
+    """sample index를 이용해 원본 batch 순서로 정렬된 pred_log를 반환한다."""
     pred_log = np.empty(n_total, dtype=float)
     filled = np.zeros(n_total, dtype=bool)
     with torch.no_grad():
@@ -117,9 +113,10 @@ def train_and_evaluate_fold(
     config_id: str,
     checkpoint_path,
 ) -> dict:
-    """fold(day3 common/folds.py 결과 dict) 하나로 Informer를 학습·평가하고
-    metrics/OOF/시간 기록을 반환한다. df는 해당 fold의 train+validation 기간을 모두
-    포함하는 이력이어야 한다(LSTM/TFT와 동일한 fold 경계/전체 history 원칙)."""
+    """한 CV fold의 Informer를 학습·평가하고 metrics/OOF/시간 기록을 반환한다.
+    validation origin의 lookback history를 보존하기 위해 전체 이력에서 시퀀스를 만든 뒤
+    fold의 train/validation origin으로 분리한다.
+    """
     t_total_start = time.perf_counter()
     device = select_device()
     set_all_seeds(seed)
@@ -174,9 +171,7 @@ def train_and_evaluate_fold(
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
     loss_fn = nn.MSELoss()
 
-    best_val_loss = float("inf")
-    best_epoch = -1
-    epochs_without_improvement = 0
+    final_val_loss = float("nan")
     epochs_completed = 0
 
     t0 = time.perf_counter()
@@ -219,21 +214,12 @@ def train_and_evaluate_fold(
                 y_log = torch.log1p(batch["target"].to(device))
                 pred_log = model(enc, dv, dk, sc, scat)
                 val_losses.append(loss_fn(pred_log, y_log).item() * len(y_log))
-        val_loss = sum(val_losses) / len(val_dataset)
+        final_val_loss = sum(val_losses) / len(val_dataset)
         epochs_completed = epoch
-
-        if val_loss < best_val_loss - EARLY_STOPPING_MIN_DELTA:
-            best_val_loss = val_loss
-            best_epoch = epoch
-            epochs_without_improvement = 0
-            torch.save(model.state_dict(), checkpoint_path)
-        else:
-            epochs_without_improvement += 1
-            if epochs_without_improvement >= EARLY_STOPPING_PATIENCE:
-                break
     train_time_sec = time.perf_counter() - t0
 
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    # EarlyStopping 없이 마지막 epoch의 in-memory weights를 평가한다.
+    torch.save(model.state_dict(), checkpoint_path)
     model.eval()
 
     t0 = time.perf_counter()
@@ -274,8 +260,8 @@ def train_and_evaluate_fold(
         "predict_time_sec": predict_time_sec,
         "total_time_sec": total_time_sec,
         "epochs_completed": epochs_completed,
-        "best_epoch": best_epoch,
-        "best_val_loss": best_val_loss,
+        "final_epoch": epochs_completed,
+        "final_val_loss": final_val_loss,
         "e_layers": e_layers,
         "n_heads": n_heads,
         "lookback": lookback,
@@ -284,4 +270,75 @@ def train_and_evaluate_fold(
         "peak_ram_mb": _peak_ram_mb(),
         "device_memory_mb": device_memory_mb,
         "device_memory_metric": device_memory_metric,
+    }
+
+
+def fit_final_model(
+    full_df,
+    horizon: int,
+    lookback: int,
+    *,
+    e_layers: int,
+    n_heads: int,
+    batch_size: int,
+    max_epochs: int,
+    learning_rate: float,
+    seed: int,
+    model_artifact_path,
+) -> dict:
+    """validation 없이 전체 이력으로 max_epochs를 학습하고 마지막 epoch artifact를 저장한다."""
+    device = select_device()
+    set_all_seeds(seed)
+    shuffle_generator = torch.Generator()
+    shuffle_generator.manual_seed(seed)
+
+    residual_nan_maps = fit_residual_nan_medians(full_df)
+    df_imputed, _ = apply_residual_nan_medians(full_df, residual_nan_maps)
+    batch = build_sequences(df_imputed, horizon, lookback)
+
+    preprocessor = SequencePreprocessor().fit(batch)
+    tensors = build_informer_tensors(preprocessor, batch, df_imputed, horizon)
+    label_len = tensors["label_len"]
+
+    dataset = InformerSequenceDataset(tensors)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, generator=shuffle_generator)
+
+    model = InformerForecaster(
+        n_time_varying=batch.time_varying.shape[-1], n_known=tensors["decoder_known"].shape[-1],
+        static_cont_dim=batch.static_cont.shape[-1], cat_vocab_sizes=preprocessor.vocab_sizes(),
+        e_layers=e_layers, n_heads=n_heads, d_model=D_MODEL, d_ff=D_FF, d_layers=D_LAYERS,
+        factor=FACTOR, dropout=DROPOUT,
+    ).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    loss_fn = nn.MSELoss()
+
+    t0 = time.perf_counter()
+    epochs_completed = 0
+    for epoch in range(1, max_epochs + 1):
+        model.train()
+        for b in loader:
+            enc = b["encoder_input"].to(device)
+            dv = b["decoder_value"].to(device)
+            dk = b["decoder_known"].to(device)
+            sc = b["static_cont"].to(device)
+            scat = b["static_cat"].to(device)
+            y_log = torch.log1p(b["target"].to(device))
+            optimizer.zero_grad()
+            pred_log = model(enc, dv, dk, sc, scat)
+            loss = loss_fn(pred_log, y_log)
+            loss.backward()
+            optimizer.step()
+        epochs_completed = epoch
+    fit_time_sec = time.perf_counter() - t0
+
+    torch.save({"model_state_dict": model.state_dict(), "preprocessor": preprocessor,
+               "e_layers": e_layers, "n_heads": n_heads, "label_len": label_len}, model_artifact_path)
+
+    return {
+        "model_artifact_path": str(model_artifact_path),
+        "n_train_sequences": len(dataset),
+        "epochs_completed": epochs_completed,
+        "label_len": label_len,
+        "fit_time_sec": fit_time_sec,
+        "device": device,
     }

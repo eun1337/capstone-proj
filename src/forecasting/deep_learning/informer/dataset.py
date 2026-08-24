@@ -1,33 +1,29 @@
 """
 dataset.py
-SequenceBatch(lookback encoder 시퀀스 + raw target)를 Informer encoder/decoder 입력
-텐서로 변환한다. decoder future known(calendar 4 + holiday 3)은 TFT의
-tft/dataset_adapter.py와 동일한 규칙으로 만든다 - calendar는 실제 target_date 행에서,
-horizon-specific holiday는 이미 origin 시점에 horizon-shift되어 있으므로 target_date
-행이 아니라 origin(encoder 마지막 timestep) 값을 그대로 쓴다(안 그러면 double-shift).
-scaling은 common/preprocessing.py의 SequencePreprocessor를 그대로 재사용한다 - decoder
-future known raw 값을 encoder와 같은 21채널 자리에 끼워 넣은 "확장 배치"를 만들어
-동일한 preprocessor.transform()을 한 번 더 호출하는 방식으로, 새 scaling 로직을
-따로 만들지 않고 train-fit 통계를 그대로 재사용한다. Dataset은 원본 batch.keys와의
-명시적 위치 정렬을 위해 매 sample마다 정수 idx를 함께 반환한다(DataLoader/prediction
-순서를 암묵적으로 가정하지 않기 위함).
+
+Informer encoder/decoder 입력 생성.
+
+SequenceBatch를 encoder sequence와 decoder 입력으로 변환한다.
+decoder calendar feature는 target_date 행에서 가져오고, horizon별 holiday feature는
+이미 shift된 origin 값을 사용한다. scaling은 train-fit SequencePreprocessor를 재사용하며,
+sample index를 함께 반환해 prediction과 원본 key의 정렬을 보장한다.
 """
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
 
-from src.ml.day3_rf_lightgbm.common.config import HOLIDAY_FEATURES
-from src.ml.day4_lstm_tft_informer.common.config import get_model_feature_roles
-from src.ml.day4_lstm_tft_informer.common.preprocessing import SequencePreprocessor
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import SequenceBatch
-from src.ml.day4_lstm_tft_informer.informer.config import label_len_for
+from src.forecasting.common.config import HOLIDAY_FEATURES
+from src.forecasting.deep_learning.common.config import get_model_feature_roles
+from src.forecasting.deep_learning.common.preprocessing import SequencePreprocessor
+from src.forecasting.deep_learning.common.sequence_builder import SequenceBatch
+from src.forecasting.deep_learning.informer.config import label_len_for
 
 
 def build_decoder_future_known(batch: SequenceBatch, df, horizon: int) -> np.ndarray:
-    """origin마다 decoder future(=target_date) 시점의 known 7개(raw, 미scale) 값을
-    만든다. calendar 4개는 target_date 실제 행, holiday 3개는 origin(encoder 마지막
-    timestep) 값을 그대로 쓴다(TFT와 동일한 double-shift 방지 규칙)."""
+    """decoder future 시점의 known feature를 구성한다.
+    calendar feature는 target_date 행에서, holiday feature는 origin 마지막 timestep에서 가져온다.
+    """
     roles = get_model_feature_roles(horizon)
     known_cols = list(roles["time_varying_known"])
     tv_cols = known_cols + list(roles["time_varying_observed"])
@@ -50,11 +46,7 @@ def build_decoder_future_known(batch: SequenceBatch, df, horizon: int) -> np.nda
 
 
 def _scale_future_known(preprocessor: SequencePreprocessor, batch: SequenceBatch, future_known_raw: np.ndarray) -> np.ndarray:
-    """future_known_raw(N, n_known)를 encoder와 동일 scaling으로 변환하기 위해,
-    encoder 시퀀스 끝에 known 채널만 채운(관측 채널은 0 placeholder) 가짜 timestep을
-    붙인 확장 SequenceBatch를 만들고 기존 SequencePreprocessor.transform()을 그대로
-    호출한다. scaling은 채널별 (x-mean)/std로 lookback 차원과 무관하게 적용되므로
-    encoder 구간 결과는 원본과 완전히 동일하다."""
+    """future known feature에 encoder와 동일한 train-fit scaling을 적용한다."""
     n_known = future_known_raw.shape[1]
     n_tv = batch.time_varying.shape[-1]
     pad = np.zeros((len(batch.target), n_tv - n_known), dtype=float)
@@ -71,10 +63,10 @@ def _scale_future_known(preprocessor: SequencePreprocessor, batch: SequenceBatch
 
 
 def build_informer_tensors(preprocessor: SequencePreprocessor, batch: SequenceBatch, df, horizon: int) -> dict:
-    """encoder_input/decoder_value/decoder_known/static_cont/static_cat/target 텐서를
-    만든다. label_len = floor(lookback/2). decoder past 구간은 encoder의 마지막
-    label_len timestep을 그대로 슬라이스한 값(scaled, encoder와 동일)이고, decoder
-    future 구간은 known만 target_date/origin 기준으로 채우고 value는 0-padding한다."""
+    """Informer encoder/decoder 입력과 static feature, target tensor를 구성한다.
+    decoder past는 encoder의 마지막 label_len 구간을 사용하고,
+    future 구간은 known feature만 채우며 value는 0으로 둔다.
+    """
     lookback = batch.time_varying.shape[1]
     label_len = label_len_for(lookback)
 
@@ -115,9 +107,7 @@ def build_informer_tensors(preprocessor: SequencePreprocessor, batch: SequenceBa
 
 
 class InformerSequenceDataset(Dataset):
-    """build_informer_tensors() 결과를 텐서로 감싼다. __getitem__은 원본 batch.keys
-    행 순서를 그대로 보존하는 정수 idx를 함께 반환해, DataLoader/prediction 결과를
-    key와 명시적으로 재정렬할 수 있게 한다."""
+    """Informer 입력을 tensor로 변환하고 원본 key 정렬을 위한 sample index를 함께 반환한다."""
 
     def __init__(self, tensors: dict):
         self.encoder_input = torch.as_tensor(tensors["encoder_input"], dtype=torch.float32)
