@@ -1,17 +1,17 @@
 """
 model.py
-Global/pooled LSTM. time-varying(known+observed) 시퀀스를 LSTM으로 인코딩한 마지막 hidden
-state를 static(categorical embedding + continuous)과 concat해 단일 Linear로 horizon
-스칼라(log1p 예측)를 낸다. categorical embedding dimension은 train-fit vocab size 기준
-cardinality 규칙(common/embedding_utils.get_embedding_size)으로 자동 결정하며 별도
-HPO 축으로 두지 않는다. Direct h1/h2/h4는 horizon마다 별도로 학습된 모델 인스턴스로
-지원한다.
+
+Global/pooled LSTM 모델.
+
+time-varying sequence의 마지막 hidden state와 static feature를 결합해
+horizon별 log1p 수요를 예측한다. categorical embedding 크기는 train-fit
+vocabulary cardinality에 따라 자동 결정한다.
 """
 
 import torch
 import torch.nn as nn
 
-from src.ml.day4_lstm_tft_informer.common.embedding_utils import get_embedding_size
+from src.forecasting.deep_learning.common.embedding_utils import get_embedding_size
 
 
 class LSTMForecaster(nn.Module):

@@ -1,8 +1,7 @@
 """
-smoke_test.py
-LSTM end-to-end functional smoke test - 실제 P10 h1 Fold1 구조 기반의 작은 재현 가능
-subset으로 preprocessing -> sequence -> fit -> predict -> inverse transform -> metrics
--> OOF 전체가 오류 없이 연결되는지만 확인한다. 성능값은 Search Space 판단에 쓰지 않는다.
+lstm_smoke_test.py
+LSTM end-to-end functional smoke test. P10 h1 Fold1 기반 재현 가능 subset으로
+preprocessing~OOF 전체 연결을 확인한다. 성능값은 Search Space 판단에 쓰지 않는다.
 """
 
 import tempfile
@@ -11,17 +10,17 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.ml.day3_rf_lightgbm.common import folds as day3_folds
-from src.ml.day3_rf_lightgbm.common import oof as day3_oof
-from src.ml.day3_rf_lightgbm.common.data_loader import load_development
-from src.ml.day4_lstm_tft_informer.common.config import get_model_feature_roles
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import build_sequences
-from src.ml.day4_lstm_tft_informer.common.structural_nan import (
+from src.forecasting.common import folds
+from src.forecasting.common import oof
+from src.forecasting.common.data_loader import load_development
+from src.forecasting.deep_learning.common.config import get_model_feature_roles
+from src.forecasting.deep_learning.common.sequence_builder import build_sequences
+from src.forecasting.deep_learning.common.structural_nan import (
     RESIDUAL_NAN_FEATURES,
     apply_residual_nan_medians,
     fit_residual_nan_medians,
 )
-from src.ml.day4_lstm_tft_informer.lstm.config import (
+from src.forecasting.deep_learning.lstm.config import (
     SMOKE_BATCH_SIZE,
     SMOKE_EPOCHS,
     SMOKE_HIDDEN_SIZE,
@@ -29,7 +28,7 @@ from src.ml.day4_lstm_tft_informer.lstm.config import (
     SMOKE_SEED,
     SMOKE_WEIGHT_DECAY,
 )
-from src.ml.day4_lstm_tft_informer.lstm.trainer import train_and_evaluate_fold
+from src.forecasting.deep_learning.lstm.trainer import train_and_evaluate_fold
 
 HORIZON = 1
 LOOKBACK = 13
@@ -38,10 +37,11 @@ N_SKUS = 80
 
 def build_smoke_subset():
     dev = load_development()
-    fold = day3_folds.generate_expanding_folds(dev, 2022, HORIZON)[0]  # P10 h1 Fold1
+    sub_a = dev[dev["center_id"] == "A"].copy()
+    fold = folds.generate_expanding_folds(sub_a, 2022, HORIZON)[0]  # P10 h1 Fold1
 
-    candidate_skus = sorted(dev.loc[fold["train_mask"] | fold["val_mask"], "sku_id"].unique())[:N_SKUS]
-    sub = dev[(dev["center_id"] == "A") & (dev["sku_id"].isin(candidate_skus))].copy()
+    candidate_skus = sorted(sub_a.loc[fold["train_mask"] | fold["val_mask"], "sku_id"].unique())[:N_SKUS]
+    sub = sub_a[sub_a["sku_id"].isin(candidate_skus)].copy()
 
     sub_fold = {
         "fold": fold["fold"],
@@ -72,7 +72,7 @@ def main() -> None:
     for feature, s in residual_summary.items():
         print(f"  {feature}: {s}")
 
-    # --- 1~4, 9~10: sequence_builder 단독 검증 (imputed subset 사용) ---
+    # --- sequence_builder 단독 검증(imputed subset) ---
     full_batch = build_sequences(sub_imputed, HORIZON, LOOKBACK)
 
     ordered_check = True
@@ -85,7 +85,7 @@ def main() -> None:
 
     check("2. sequence length == lookback(13)", full_batch.time_varying.shape[1] == LOOKBACK)
 
-    # target alignment: origin row의 target_h1이 dev의 실제 값과 일치하는지 샘플 확인
+    # target alignment: origin row target이 실제 값과 일치하는지 샘플 확인
     dev_check = sub.set_index(["center_id", "sku_id", "week_st"])["target_h1"]
     sample_idx = full_batch.keys.sample(min(50, len(full_batch.keys)), random_state=42).index
     alignment_ok = True
@@ -97,8 +97,7 @@ def main() -> None:
             break
     check("3. target alignment 정상", alignment_ok)
 
-    # window의 마지막/첫 timestep이 origin/origin-(lookback-1)주의 실제 qty_log1p와
-    # 일치하는지 확인해 origin 이후 row가 섞이지 않았음을 교차검증
+    # window 첫/끝이 origin 이후 row를 포함하지 않는지 교차검증(leakage 방지)
     roles = get_model_feature_roles(HORIZON)
     tv_cols = list(roles["time_varying_known"]) + list(roles["time_varying_observed"])
     qty_log1p_pos = tv_cols.index("qty_log1p")
@@ -124,14 +123,12 @@ def main() -> None:
     check("10. target NaN/Inf/음수 없음",
           np.isfinite(full_batch.target).all() and (full_batch.target >= 0).all())
 
-    # --- 5: train target_date < validation_start ---
+    # --- train target_date < validation_start (purge) ---
     train_keys_set_df = sub.loc[sub_fold["train_mask"]]
     train_target_date = train_keys_set_df["week_st"] + pd.Timedelta(weeks=HORIZON)
     check("5. train target_date < validation_start", bool((train_target_date < sub_fold["val_start"]).all()))
 
-    # --- 7, 8: insufficient history / validation 누락 수는 trainer 결과에서 확인 ---
-
-    # --- 11~18: end-to-end trainer 실행 ---
+    # --- end-to-end trainer 실행 ---
     with tempfile.TemporaryDirectory() as tmpdir:
         checkpoint_path = Path(tmpdir) / "lstm_smoke.pt"
         result = train_and_evaluate_fold(
@@ -151,9 +148,11 @@ def main() -> None:
         check("embedding size 자동 계산 정상(1 이상)", all(s >= 1 for s in result["cat_embedding_sizes"]))
 
         check("6. scaler/encoder fit은 train only (RuntimeError 없이 fit->transform 성공)", True)
-        print(f"7. validation sequence 누락 수: {result['n_val_insufficient_history']}")
-        print(f"8. insufficient history 수(train): {result['n_train_insufficient_history']}")
-        check("7/8. 누락 수 정상 보고(0 이상 정수)",
+        print(f"7. validation sequence 생성 제외 수(lookback 부족 또는 target NaN 포함): "
+              f"{result['n_val_insufficient_history']}")
+        print(f"8. train sequence 생성 제외 수(lookback 부족 또는 target NaN 포함): "
+              f"{result['n_train_insufficient_history']}")
+        check("7/8. 생성 제외 수 정상 보고(0 이상 정수)",
               result["n_val_insufficient_history"] >= 0 and result["n_train_insufficient_history"] >= 0)
 
         print()
@@ -178,7 +177,7 @@ def main() -> None:
         check("17. evaluator 계산 PASS", all(np.isfinite(m[k]) for k in ["wape", "bias", "rmse", "mae"]))
 
         try:
-            day3_oof.validate_oof_frame(result["oof"])
+            oof.validate_oof_frame(result["oof"])
             oof_valid = True
         except Exception:
             oof_valid = False
@@ -192,8 +191,8 @@ def main() -> None:
               f"preprocessing={result['preprocessing_time_sec']:.2f}s "
               f"train={result['train_time_sec']:.2f}s predict={result['predict_time_sec']:.2f}s "
               f"total={result['total_time_sec']:.2f}s")
-        print(f"epochs_completed={result['epochs_completed']} best_epoch={result['best_epoch']} "
-              f"best_val_loss={result['best_val_loss']:.4f}")
+        print(f"epochs_completed={result['epochs_completed']} final_epoch={result['final_epoch']} "
+              f"final_val_loss={result['final_val_loss']:.4f}")
         print(f"device={result['device']} seed={result['seed']} "
               f"peak_ram_mb={result['peak_ram_mb']:.1f} "
               f"device_memory_mb={result['device_memory_mb']} ({result['device_memory_metric']})")

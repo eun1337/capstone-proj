@@ -1,12 +1,11 @@
 """
 trainer.py
-LSTM 1-fold 학습/평가. fold TRAIN으로 adi/cv2 residual NaN 계층형 median을 fit해 전체
-history에 적용한 뒤 시퀀스를 만들고, common/preprocessing, common/dataset과 day3
-common/evaluator, common/oof를 재사용해 fold 하나의 train/validation을 학습·평가하고
-metrics/OOF/시간/체크포인트 기록을 반환한다. hidden_size/learning_rate/batch_size/
-weight_decay는 호출부가 정하는 HPO 축이며, seed는 python random/numpy/torch(+CUDA)와
-DataLoader shuffle generator까지 전부 고정한다(MPS 전용 deterministic 옵션은 강제하지
-않음).
+
+LSTM 학습/평가.
+
+fold train으로 residual NaN 처리와 전처리를 fit한 뒤 시퀀스를 생성해
+한 CV fold의 학습·평가와 OOF 생성을 수행한다. P13은 hidden_size만 탐색하며,
+EarlyStopping 없이 max_epochs를 모두 학습한 마지막 epoch 모델을 평가한다.
 """
 
 import random
@@ -19,21 +18,21 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from src.ml.day3_rf_lightgbm.common import evaluator as ev
-from src.ml.day3_rf_lightgbm.common import oof as oo
-from src.ml.day4_lstm_tft_informer.common.dataset import SequenceDataset
-from src.ml.day4_lstm_tft_informer.common.preprocessing import SequencePreprocessor
-from src.ml.day4_lstm_tft_informer.common.sequence_builder import (
+from src.forecasting.common import evaluator as ev
+from src.forecasting.common import oof as oo
+from src.forecasting.deep_learning.common.dataset import SequenceDataset
+from src.forecasting.deep_learning.common.preprocessing import SequencePreprocessor
+from src.forecasting.deep_learning.common.sequence_builder import (
     build_sequences,
     fold_origin_key_set,
     split_batch_by_origin_keys,
 )
-from src.ml.day4_lstm_tft_informer.common.structural_nan import (
+from src.forecasting.deep_learning.common.structural_nan import (
     apply_residual_nan_medians,
     fit_residual_nan_medians,
 )
-from src.ml.day4_lstm_tft_informer.lstm.config import DROPOUT, NUM_LAYERS
-from src.ml.day4_lstm_tft_informer.lstm.model import LSTMForecaster
+from src.forecasting.deep_learning.lstm.config import DROPOUT, NUM_LAYERS
+from src.forecasting.deep_learning.lstm.model import LSTMForecaster
 
 
 def select_device() -> str:
@@ -45,8 +44,7 @@ def select_device() -> str:
 
 
 def set_all_seeds(seed: int) -> None:
-    """Python random/NumPy/torch(+CUDA 사용 시)를 동일 seed로 맞춘다. MPS 전용
-    deterministic 옵션은 강제로 켜지 않는다(미지원 연산에서 오류가 날 수 있음)."""
+    """Python random, NumPy, torch와 CUDA 사용 시 CUDA seed를 동일하게 설정한다."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -60,9 +58,7 @@ def _peak_ram_mb() -> float:
 
 
 def _device_memory_mb(device: str) -> tuple:
-    """디바이스 메모리 스냅샷과 그 지표 이름을 함께 반환한다. CUDA는 실제 peak
-    (max_memory_allocated)이지만, MPS는 backend에 peak 추적 API가 없어
-    current_allocated_memory(호출 시점 값, peak 아님)만 제공한다 - 이름에 그대로 반영한다."""
+    """CUDA peak 또는 MPS 현재 할당 메모리와 해당 지표명을 반환한다."""
     try:
         if device == "cuda":
             return torch.cuda.max_memory_allocated() / (1024 * 1024), "cuda_max_memory_allocated_mb"
@@ -90,12 +86,10 @@ def train_and_evaluate_fold(
     config_id: str,
     checkpoint_path,
 ) -> dict:
-    """fold(day3 common/folds.py 결과 dict, train_mask/val_mask 포함) 하나로 LSTM을
-    학습·평가하고 metrics/OOF/시간 기록을 반환한다. df는 해당 fold의 train+validation
-    기간을 모두 포함하는 이력이어야 한다 - validation origin의 lookback 히스토리가
-    train 기간에 걸쳐 있으므로 시퀀스는 df 전체에서 한 번만 만들고, 이후 fold의
-    train_mask/val_mask로 origin을 나눈다(RF/LGBM과 동일한 경계, 시퀀스 특성상 분리
-    시점만 다름)."""
+    """한 CV fold의 LSTM을 학습·평가하고 metrics/OOF/시간 기록을 반환한다.
+    validation origin의 lookback history를 보존하기 위해 전체 이력에서 시퀀스를 만든 뒤
+    fold의 train/validation origin key로 분리한다.
+    """
     t_total_start = time.perf_counter()
     device = select_device()
 
@@ -144,8 +138,7 @@ def train_and_evaluate_fold(
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     loss_fn = nn.MSELoss()
 
-    best_val_loss = float("inf")
-    best_epoch = -1
+    final_val_loss = float("nan")
 
     t0 = time.perf_counter()
     for epoch in range(1, max_epochs + 1):
@@ -172,16 +165,12 @@ def train_and_evaluate_fold(
                 y_log = torch.log1p(batch["target"].to(device))
                 pred_log = model(tv, sc, scat)
                 val_losses.append(loss_fn(pred_log, y_log).item() * len(y_log))
-        val_loss = sum(val_losses) / len(val_dataset)
-
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_epoch = epoch
-            torch.save(model.state_dict(), checkpoint_path)
+        final_val_loss = sum(val_losses) / len(val_dataset)
     train_time_sec = time.perf_counter() - t0
     epochs_completed = max_epochs
 
-    model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+    # EarlyStopping 없이 마지막 epoch의 in-memory weights를 평가한다.
+    torch.save(model.state_dict(), checkpoint_path)
     model.eval()
 
     t0 = time.perf_counter()
@@ -234,11 +223,81 @@ def train_and_evaluate_fold(
         "predict_time_sec": predict_time_sec,
         "total_time_sec": total_time_sec,
         "epochs_completed": epochs_completed,
-        "best_epoch": best_epoch,
-        "best_val_loss": best_val_loss,
+        "final_epoch": epochs_completed,
+        "final_val_loss": final_val_loss,
         "device": device,
         "seed": seed,
         "peak_ram_mb": _peak_ram_mb(),
         "device_memory_mb": device_memory_mb,
         "device_memory_metric": device_memory_metric,
+    }
+
+
+def fit_final_model(
+    full_df,
+    horizon: int,
+    lookback: int,
+    *,
+    hidden_size: int,
+    batch_size: int,
+    max_epochs: int,
+    learning_rate: float,
+    weight_decay: float,
+    seed: int,
+    model_artifact_path,
+) -> dict:
+    """validation 없이 전체 이력으로 max_epochs를 학습하고 Final artifact를 저장한다."""
+    device = select_device()
+    set_all_seeds(seed)
+    shuffle_generator = torch.Generator()
+    shuffle_generator.manual_seed(seed)
+
+    t0 = time.perf_counter()
+    residual_nan_maps = fit_residual_nan_medians(full_df)
+    df_imputed, _ = apply_residual_nan_medians(full_df, residual_nan_maps)
+    batch = build_sequences(df_imputed, horizon, lookback)
+    sequence_build_time_sec = time.perf_counter() - t0
+
+    t0 = time.perf_counter()
+    preprocessor = SequencePreprocessor().fit(batch)
+    transformed = preprocessor.transform(batch)
+    preprocessing_time_sec = time.perf_counter() - t0
+
+    dataset = SequenceDataset(transformed)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=True, generator=shuffle_generator)
+
+    model = LSTMForecaster(
+        n_time_varying=batch.time_varying.shape[-1], static_cont_dim=batch.static_cont.shape[-1],
+        cat_vocab_sizes=preprocessor.vocab_sizes(), hidden_size=hidden_size,
+        num_layers=NUM_LAYERS, dropout=DROPOUT,
+    ).to(device)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    loss_fn = nn.MSELoss()
+
+    t0 = time.perf_counter()
+    for _epoch in range(1, max_epochs + 1):
+        model.train()
+        for b in loader:
+            tv = b["time_varying"].to(device)
+            sc = b["static_cont"].to(device)
+            scat = b["static_cat"].to(device)
+            y_log = torch.log1p(b["target"].to(device))
+            optimizer.zero_grad()
+            pred_log = model(tv, sc, scat)
+            loss = loss_fn(pred_log, y_log)
+            loss.backward()
+            optimizer.step()
+    train_time_sec = time.perf_counter() - t0
+
+    torch.save({"model_state_dict": model.state_dict(), "preprocessor": preprocessor,
+               "hidden_size": hidden_size}, model_artifact_path)
+
+    return {
+        "model_artifact_path": str(model_artifact_path),
+        "n_train_sequences": len(dataset),
+        "epochs_completed": max_epochs,
+        "sequence_build_time_sec": sequence_build_time_sec,
+        "preprocessing_time_sec": preprocessing_time_sec,
+        "fit_time_sec": train_time_sec,
+        "device": device,
     }
