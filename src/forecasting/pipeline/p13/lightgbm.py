@@ -330,6 +330,8 @@ def main() -> None:
              "P10(2022) 등 다른 stage의 key 파일을 전달하면 fail-fast한다. "
              "이 옵션 없이 실행되는 경로는 없다.",
     )
+    parser.add_argument("--horizon", type=int, choices=list(HORIZONS), default=None,
+                        help="지정 시 해당 horizon만 실행(생략 시 전체 HORIZONS를 기존 순서대로 실행)")
     args = parser.parse_args()
 
     common_eval_keys_path = Path(args.common_eval_keys_path)
@@ -342,7 +344,8 @@ def main() -> None:
     oof_dir = out_dir / "oof"
     oof_dir.mkdir(parents=True, exist_ok=True)
 
-    for h in HORIZONS:
+    horizons_to_run = [args.horizon] if args.horizon is not None else list(HORIZONS)
+    for h in horizons_to_run:
         print(f"[P13][lightgbm] horizon={h} Final HPO 시작 (n_trials={args.n_trials}, common_eval_keys={common_eval_keys_path})")
         result = run_p13_hpo(sub_a, h, args.n_trials, args.seed, args.sampler_seed, common_eval_keys, common_eval_keys_path)
 

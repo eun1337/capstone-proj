@@ -209,6 +209,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=P13_MODEL_SEED)
     parser.add_argument("--sampler-seed", type=int, default=P13_SAMPLER_SEED)
     parser.add_argument("--common-eval-keys-path", required=True)
+    parser.add_argument("--horizon", type=int, choices=list(HORIZONS), default=None,
+                        help="지정 시 해당 horizon만 실행(생략 시 전체 HORIZONS를 기존 순서대로 실행)")
     args = parser.parse_args()
 
     common_eval_keys_path = Path(args.common_eval_keys_path)
@@ -222,7 +224,8 @@ def main() -> None:
     checkpoint_root = out_dir / "_checkpoints"
     oof_dir.mkdir(parents=True, exist_ok=True)
 
-    for h in HORIZONS:
+    horizons_to_run = [args.horizon] if args.horizon is not None else list(HORIZONS)
+    for h in horizons_to_run:
         print(f"[P13][{FAMILY}] horizon={h} Final HPO 시작 (n_trials={_GRID_SIZE}, common_eval_keys={common_eval_keys_path})")
         result = run_p13_hpo(sub_a, h, args.seed, args.sampler_seed, common_eval_keys, common_eval_keys_path, checkpoint_root)
 
