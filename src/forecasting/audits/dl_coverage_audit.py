@@ -122,6 +122,56 @@ def classify_missing_reason(target_lookup: pd.Series, lookback, key, run_length_
     return "other_unexpected"
 
 
+def compute_common_dl_missing_keys(
+    sub_a: pd.DataFrame, validation_year: int,
+    horizons=HORIZONS, lookbacks=LOOKBACKS,
+) -> pd.DataFrame:
+    """model='common'(LSTM/TFT/Informer 공용) DL sequence coverage missing key만 계산한다.
+    main()의 동일 로직 중 LSTM/TFT/Informer adapter별 diagnostic(coverage summary,
+    audit_pass)은 계산하지 않는다 - four_family_protocol_audit.build_common_evaluation_keys()가
+    실제로 쓰는 것은 model='common' 행뿐이기 때문이다. validation_year를 파라미터로 받아
+    P10(2022)/P13(2023) 어디든 재사용 가능하며, 기존 main()(P10, 하드코드 2022, 3개 adapter
+    포함)은 이 함수와 무관하게 그대로 유지된다."""
+    missing_rows = []
+    for horizon in horizons:
+        target_col = TARGET_COLS[horizon]
+        roles = get_model_feature_roles(horizon)
+        tv_cols = list(roles["time_varying_known"]) + list(roles["time_varying_observed"])
+
+        folds = day3_folds.generate_expanding_folds(sub_a, validation_year, horizon)
+        for fold in folds:
+            fold_id = fold["fold"]
+            expected_val_keys = fold_origin_key_set(sub_a, fold["val_mask"])
+
+            residual_maps = fit_residual_nan_medians(sub_a.loc[fold["train_mask"]])
+            sub_imputed, _ = apply_residual_nan_medians(sub_a, residual_maps)
+
+            run_length_map = _compute_run_length_map(sub_imputed)
+            df_indexed_for_window = sub_imputed.set_index([CENTER_COL, SKU_COL]).sort_index()
+            target_lookup = sub_imputed.set_index([CENTER_COL, SKU_COL, WEEK_COL])[target_col].sort_index()
+
+            for lookback in lookbacks:
+                full_batch = build_sequences(sub_imputed, horizon, lookback)
+                val_batch = split_batch_by_origin_keys(full_batch, expected_val_keys)
+                generated_val_keys = _key_set(val_batch.keys)
+                missing_val_keys = expected_val_keys - generated_val_keys
+
+                for key in missing_val_keys:
+                    reason = classify_missing_reason(
+                        target_lookup, lookback, key, run_length_map, df_indexed_for_window, tv_cols,
+                    )
+                    missing_rows.append({
+                        "model": "common", "horizon": horizon, "fold": fold_id, "lookback": lookback,
+                        "center_id": key[0], "sku_id": key[1], "week_st": key[2],
+                        "target_date": key[2] + pd.Timedelta(weeks=horizon), "reason": reason,
+                    })
+
+    return pd.DataFrame(
+        missing_rows,
+        columns=["model", "horizon", "fold", "lookback", "center_id", "sku_id", "week_st", "target_date", "reason"],
+    )
+
+
 def _decode_tft_covered_keys(dataset, val_batch, group_offset: int) -> set:
     """TFT TimeSeriesDataSet이 실제로 만든 sample의 origin_id를 디코드해 원본
     (center_id, sku_id, week_st) key set으로 되돌린다. len(dataset)==len(val_batch)일

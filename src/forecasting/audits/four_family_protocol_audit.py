@@ -155,17 +155,19 @@ def _key_set_from_df(df: pd.DataFrame) -> set:
     return set(zip(df["center_id"], df["sku_id"], df["week_st"]))
 
 
-def build_common_evaluation_keys() -> tuple:
-    """P10 기준 horizon x fold별로 expected_val_keys/rf_eligible_keys/dl_lb13_keys/
+def build_common_evaluation_keys(validation_year: int = 2022, missing_keys_path: Path = DL_MISSING_KEYS_CSV) -> tuple:
+    """horizon x fold별로 expected_val_keys/rf_eligible_keys/dl_lb13_keys/
     dl_lb26_keys를 실제 (center_id, sku_id, week_st) key set으로 구성하고,
     common_eval_keys = rf_eligible_keys & dl_lb13_keys & dl_lb26_keys를 실제 set
     교집합으로 계산한다(개수만으로 계산하지 않음). 동시에 dl_lb26 ⊆ dl_lb13,
     dl_lb26 ⊆ rf_eligible, duplicate==0을 검증한다.
 
-    DL 쪽 missing key는 이미 저장된 outputs/audits/dl_coverage_missing_keys.csv
-    (DL coverage audit 72/72 PASS 시점에 실제 production sequence_builder 경로로
-    생성됨)를 재사용한다 - 53분짜리 전체 시퀀스 재생성을 protocol audit 안에서
-    다시 하지 않기 위함. RF eligible key는 이 함수 안에서 직접(count가 아니라
+    DL 쪽 missing key는 이미 저장된 missing_keys_path(기본값 outputs/audits/dl_coverage_missing_keys.csv,
+    DL coverage audit 72/72 PASS 시점에 실제 production sequence_builder 경로로 생성된 P10 결과)를
+    재사용한다 - 53분짜리 전체 시퀀스 재생성을 protocol audit 안에서 다시 하지 않기 위함.
+    validation_year가 기본값(2022=P10)이 아니면 그 연도에 맞는 missing_keys_path를 함께
+    넘겨야 한다(예: P13은 dl_coverage_audit.compute_common_dl_missing_keys(validation_year=2023)
+    결과를 별도 경로에 저장한 뒤 전달). RF eligible key는 이 함수 안에서 직접(count가 아니라
     실제 target_h{h} not-NaN row의 key로) 만든다.
 
     Returns: (summary_df, common_keys_df, regression_info dict)
@@ -173,7 +175,7 @@ def build_common_evaluation_keys() -> tuple:
     dev = load_development()
     sub_a = dev[dev["center_id"] == "A"].copy()
 
-    missing = pd.read_csv(DL_MISSING_KEYS_CSV)
+    missing = pd.read_csv(missing_keys_path)
     missing = missing[missing["model"] == "common"].copy()
     missing["week_st"] = pd.to_datetime(missing["week_st"])
 
@@ -183,7 +185,7 @@ def build_common_evaluation_keys() -> tuple:
 
     for horizon in HORIZONS:
         target_col = TARGET_COLS[horizon]
-        folds = folds_ref.generate_expanding_folds(sub_a, 2022, horizon)
+        folds = folds_ref.generate_expanding_folds(sub_a, validation_year, horizon)
         for fold in folds:
             fold_id = fold["fold"]
 
@@ -346,7 +348,7 @@ def main() -> None:
     print()
     print("전체 protocol_pass?", bool(protocol_df["protocol_pass"].all()))
 
-    summary_df, common_keys_df, regression_info = build_common_evaluation_keys()
+    summary_df, common_keys_df, regression_info = build_common_evaluation_keys(validation_year=2022)
     summary_df.to_csv(COMMON_EVAL_SUMMARY_CSV, index=False)
     common_keys_df.to_csv(COMMON_EVAL_KEYS_CSV, index=False)
     common_keys_df.to_parquet(COMMON_EVAL_KEYS_PARQUET, index=False)

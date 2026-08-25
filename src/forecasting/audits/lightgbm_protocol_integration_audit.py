@@ -156,15 +156,15 @@ def _key_set_from_df(df: pd.DataFrame, horizon: int, fold_id: int) -> pd.DataFra
     return out[["horizon", "fold", "center_id", "sku_id", "week_st", "target_date"]]
 
 
-def build_lightgbm_eligible_keys(sub_a: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+def build_lightgbm_eligible_keys(sub_a: pd.DataFrame, validation_year: int = 2022) -> tuple[pd.DataFrame, pd.DataFrame]:
     """RF와 동일한 기준(tabular, target_h{h} not-NaN)으로 LightGBM eligible validation
-    key를 horizon x fold(P10, 2022, 4-fold)별로 계산한다. 모델 fit 없음."""
+    key를 horizon x fold(기본값 P10/2022, 4-fold)별로 계산한다. 모델 fit 없음."""
     rows_summary = []
     all_keys = []
 
     for horizon in HORIZONS:
         target_col = cfg.TARGET_COLS[horizon]
-        folds = folds_ref.generate_expanding_folds(sub_a, 2022, horizon)
+        folds = folds_ref.generate_expanding_folds(sub_a, validation_year, horizon)
         for fold in folds:
             fold_id = fold["fold"]
             val_df = sub_a.loc[fold["val_mask"]]
@@ -211,7 +211,7 @@ def main() -> None:
     print("=" * 100)
     dev = load_development()
     sub_a = dev[dev["center_id"] == "A"].copy()
-    lgbm_eligible_keys, eligibility_summary = build_lightgbm_eligible_keys(sub_a)
+    lgbm_eligible_keys, eligibility_summary = build_lightgbm_eligible_keys(sub_a, validation_year=2022)
     print(eligibility_summary.to_string(index=False))
     all_match = bool(eligibility_summary["matches_expected"].all())
     print(f"\n모든 horizon x fold에서 lightgbm_eligible_rows == expected_val_rows? {all_match}")
