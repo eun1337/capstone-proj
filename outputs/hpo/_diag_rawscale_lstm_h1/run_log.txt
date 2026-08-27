@@ -1,0 +1,35 @@
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+[diag][lstm-rawscale] h1 시작: 2개 trial (기존 grid 재사용), common_eval_keys=C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\audits\p13\five_family_common_evaluation_keys.parquet
+[diag][lstm-rawscale] trial0 params={'hidden_size': 32, 'lookback': 13, 'learning_rate': 0.001, 'batch_size': 1024, 'weight_decay': 0.0, 'num_layers': 1, 'dropout': 0.0, 'max_epochs': 20} 학습 시작...
+[diag][lstm-rawscale] trial0 완료(status=ok): WAPE=183.4125 Bias=133.3755
+[diag][lstm-rawscale] trial1 params={'hidden_size': 64, 'lookback': 13, 'learning_rate': 0.001, 'batch_size': 1024, 'weight_decay': 0.0, 'num_layers': 1, 'dropout': 0.0, 'max_epochs': 20} 학습 시작...
+[diag][lstm-rawscale] trial1 완료(status=ok): WAPE=187.1505 Bias=143.4894
+[diag][lstm-rawscale] 저장 완료: C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hpo\_diag_rawscale_lstm_h1\p13_lstm_h1_rawscale.json
+
+=== log1p 재변환 편향 가설 검증 결과 (lstm h1) ===
+| 구분                                 |  pooled_wape |  pooled_bias |
+|------------------------------------------------------------------|
+| 기존 (log1p, trial0)                 |       64.999 |       -29.11 |
+| 이번 (raw scale, trial0)             |      183.412 |       133.38 |
+    -> bias 변화량: +162.49%p (부호 반전: True, status=ok)
+| 기존 (log1p, trial1)                 |       62.948 |       -30.49 |
+| 이번 (raw scale, trial1)             |      187.150 |       143.49 |
+    -> bias 변화량: +173.98%p (부호 반전: True, status=ok)
+
+결과 파일: C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hpo\_diag_rawscale_lstm_h1\p13_lstm_h1_rawscale.json
+체크포인트/로그 등 모든 산출물: C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hpo\_diag_rawscale_lstm_h1
