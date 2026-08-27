@@ -1,0 +1,76 @@
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\run_hurdle_rf.py:69: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  sku_avg_qty = train_df.groupby(["center_id", "sku_id"])["qty"].mean().rename("avg_qty").reset_index()
+[hurdle-rf] h1 fold1 학습 완료 (train=872463 val=148000 pos_rate=0.2931)
+[hurdle-rf] h1 fold2 학습 완료 (train=1020463 val=154067 pos_rate=0.2810)
+[hurdle-rf] h1 fold3 학습 완료 (train=1174530 val=158671 pos_rate=0.2724)
+[hurdle-rf] h1 fold4 학습 완료 (train=1333201 val=163090 pos_rate=0.2651)
+[hurdle-rf] h1 classifier(max_features=0.1, min_samples_leaf=100) x 8 regressor 조합 평가 완료
+[hurdle-rf] h1 classifier(max_features=0.1, min_samples_leaf=500) x 8 regressor 조합 평가 완료
+[hurdle-rf] h1 classifier(max_features=0.3333333333333333, min_samples_leaf=100) x 8 regressor 조합 평가 완료
+[hurdle-rf] h1 classifier(max_features=0.3333333333333333, min_samples_leaf=500) x 8 regressor 조합 평가 완료
+[hurdle-rf] h1 저장 완료: C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\p13_hurdle_rf_h1.json (guardrail_pass=16/32, reason=near_tie_broken_by_worst_fold_wape(n_near_ties=2))
+[hurdle-rf] h2 fold1 학습 완료 (train=861287 val=147556 pos_rate=0.2920)
+[hurdle-rf] h2 fold2 학습 완료 (train=1008843 val=153663 pos_rate=0.2798)
+[hurdle-rf] h2 fold3 학습 완료 (train=1162506 val=158330 pos_rate=0.2713)
+[hurdle-rf] h2 fold4 학습 완료 (train=1320836 val=162758 pos_rate=0.2640)
+[hurdle-rf] h2 classifier(max_features=0.1, min_samples_leaf=100) x 8 regressor 조합 평가 완료
+[hurdle-rf] h2 classifier(max_features=0.1, min_samples_leaf=500) x 8 regressor 조합 평가 완료
+[hurdle-rf] h2 classifier(max_features=0.3333333333333333, min_samples_leaf=100) x 8 regressor 조합 평가 완료
+[hurdle-rf] h2 classifier(max_features=0.3333333333333333, min_samples_leaf=500) x 8 regressor 조합 평가 완료
+[hurdle-rf] h2 저장 완료: C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\p13_hurdle_rf_h2.json (guardrail_pass=16/32, reason=near_tie_broken_by_worst_fold_wape(n_near_ties=2))
+[hurdle-rf] h4 fold1 학습 완료 (train=839053 val=146678 pos_rate=0.2906)
+[hurdle-rf] h4 fold2 학습 완료 (train=985731 val=152821 pos_rate=0.2785)
+[hurdle-rf] h4 fold3 학습 완료 (train=1138552 val=157632 pos_rate=0.2698)
+[hurdle-rf] h4 fold4 학습 완료 (train=1296184 val=162078 pos_rate=0.2625)
+[hurdle-rf] h4 classifier(max_features=0.1, min_samples_leaf=100) x 8 regressor 조합 평가 완료
+[hurdle-rf] h4 classifier(max_features=0.1, min_samples_leaf=500) x 8 regressor 조합 평가 완료
+[hurdle-rf] h4 classifier(max_features=0.3333333333333333, min_samples_leaf=100) x 8 regressor 조합 평가 완료
+[hurdle-rf] h4 classifier(max_features=0.3333333333333333, min_samples_leaf=500) x 8 regressor 조합 평가 완료
+[hurdle-rf] h4 저장 완료: C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hurdle_hpo\rf_hurdle\p13_hurdle_rf_h4.json (guardrail_pass=16/32, reason=near_tie_broken_by_worst_fold_wape(n_near_ties=3))
+EXIT_CODE=0
