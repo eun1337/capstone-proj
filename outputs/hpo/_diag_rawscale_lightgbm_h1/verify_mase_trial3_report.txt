@@ -1,0 +1,87 @@
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+[verify] trial3 log1p(원본 trainer.py, 미수정) 재실행...
+[verify] log1p 재현: wape=59.5044 bias=-31.6307 mase=0.6082 (기존 JSON: wape=59.5044 bias=-31.6307 mase=0.6082)
+[verify] trial3 raw scale(run_diagnostic.py, 미수정) 재실행...
+[verify] raw scale 재현: wape=67.8351 bias=3.4496 mase=1.6352 (진단 JSON: wape=67.8351 bias=3.4496 mase=1.6352)
+
+[verify] merge된 row 수: 577319 (log1p=577319, raw=577319)
+[verify] mase_scale(log1p) vs mase_scale(raw) 최대 절대 차이: 0.0 (0이어야 정상 - 동일 fold train history로 계산되므로 target 변환과 무관함)
+
+[verify] mase_n(유효 denominator row 수) = 540822 (기존 JSON mase_n 합계 = 124393+132312+138949+145168 = 540822)
+[verify] mean(ratio_log1p) = 0.6082  (== pooled_mase 재현값과 일치해야 함)
+[verify] mean(ratio_raw)   = 1.6352  (== pooled_mase 재현값과 일치해야 함)
+
+[verify] mase_scale(denominator) 분포 (log1p run 기준, raw와 동일):
+count    540822.000000
+mean          3.158054
+std          11.560504
+min           0.007092
+1%            0.009346
+5%            0.026316
+25%           0.210526
+50%           0.758621
+75%           2.407407
+95%          11.405405
+99%          38.852174
+max         439.230769
+
+[verify] pooled_mase 증가 기여도 상위 20개 row (ratio_raw - ratio_log1p 기준):
+center_id              sku_id    week_st  y_true_log1p  y_pred_log1p  y_pred_raw  mase_scale_log1p  ratio_log1p   ratio_raw  ratio_delta
+        A  8807920893253*EA*1 2023-10-16           0.0      6.501521  139.345845          0.135417    48.011234 1029.015467   981.004234
+        A  8809339390699*CS*1 2023-01-02           0.0      0.000000    8.585652          0.009901     0.000000  867.150877   867.150877
+        A  8809339390699*CS*1 2023-01-23           0.0      0.000000    8.585652          0.009901     0.000000  867.150877   867.150877
+        A  8809339390699*CS*1 2023-01-30           0.0      0.000000    8.585652          0.009901     0.000000  867.150877   867.150877
+        A  8809339390699*CS*1 2023-01-16           0.0      0.000000    8.585652          0.009901     0.000000  867.150877   867.150877
+        A 18801223100176*BX*1 2023-07-17           0.0      0.008691    6.782694          0.008065     1.077722  841.054076   839.976355
+        A 18801223100176*BX*1 2023-08-07           0.0      0.008691    6.782694          0.008065     1.077722  841.054076   839.976355
+        A 18801223100176*BX*1 2023-08-28           0.0      0.008691    6.782694          0.008065     1.077722  841.054076   839.976355
+        A 18801223100176*BX*1 2023-06-26           0.0      0.008691    6.782694          0.008065     1.077722  841.054076   839.976355
+        A  8809339390699*CS*1 2023-01-09           0.0      0.000000    8.300454          0.009901     0.000000  838.345847   838.345847
+        A 18801223100176*BX*1 2023-07-10           0.0      0.008691    6.720848          0.008065     1.077722  833.385183   832.307461
+        A  8807920893253*EA*1 2023-10-30           0.0      6.504713  111.369627          0.135417    48.034806  822.421864   774.387058
+        A  8807920893253*EA*1 2023-11-06           0.0      4.017283  104.708137          0.135417    29.666090  773.229322   743.563232
+        A  8809722040118*CS*1 2023-01-16           0.0      0.000000    8.585652          0.012195     0.000000  704.023484   704.023484
+        A  8809722040118*CS*1 2023-01-23           0.0      0.000000    8.585652          0.012195     0.000000  704.023484   704.023484
+        A  8809722040118*CS*1 2023-01-02           0.0      0.000000    8.585652          0.012195     0.000000  704.023484   704.023484
+        A  8809722040118*CS*1 2023-01-30           0.0      0.000000    8.585652          0.012195     0.000000  704.023484   704.023484
+        A  8809722040118*CS*1 2023-01-09           0.0      0.000000    8.300454          0.012195     0.000000  680.637222   680.637222
+        A  8801056996017*EA*1 2023-03-27           0.0      2.006620   14.822056          0.019802   101.334287  748.513827   647.179541
+        A  8801037088243*EA*1 2023-03-27           0.0      3.519439   10.508555          0.011364   309.710612  924.752798   615.042186
+
+[verify] mase_scale 하위 1%(<= 0.0093) row 제외 시:
+  전체:   mean(ratio_log1p)=0.6082  mean(ratio_raw)=1.6352  delta=1.0270
+  trim1%: mean(ratio_log1p)=0.5930  mean(ratio_raw)=1.4571  delta=0.8641
+  (하위 1% row가 제외된 만큼 delta가 크게 줄어들면 -> 소수의 저변동 시계열이 MASE 증가를 주도한다는 뜻)
+
+[verify] (참고) 동일 row subset 기준 WAPE: log1p=59.33 raw=67.27 -> WAPE는 전역 합 비율이라 MASE(row 평균 비율)보다 outlier에 덜 민감함을 보여줌

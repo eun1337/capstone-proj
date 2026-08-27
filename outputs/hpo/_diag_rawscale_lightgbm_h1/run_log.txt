@@ -1,0 +1,85 @@
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+C:\Users\82103\AppData\Local\Programs\Python\Python312\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+C:\Users\82103\Desktop\GIthub\capstone-proj\src\forecasting\common\evaluator.py:33: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  grp = ordered.groupby(["center_id", "sku_id"])["qty"]
+[diag][lightgbm-rawscale] h1 시작: 4개 trial (기존 grid 재사용), common_eval_keys=C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\audits\p13\five_family_common_evaluation_keys.parquet
+[diag][lightgbm-rawscale] trial0 params={'num_leaves': 31, 'min_child_samples': 1000, 'feature_fraction': 0.4, 'bagging_fraction': 0.4, 'bagging_freq': 1, 'lambda_l1': 0.0, 'lambda_l2': 0.0} 학습 시작...
+[diag][lightgbm-rawscale] trial0 완료: WAPE=67.8169 Bias=0.2483
+[diag][lightgbm-rawscale] trial1 params={'num_leaves': 8, 'min_child_samples': 100, 'feature_fraction': 0.4, 'bagging_fraction': 0.4, 'bagging_freq': 1, 'lambda_l1': 0.0, 'lambda_l2': 0.0} 학습 시작...
+[diag][lightgbm-rawscale] trial1 완료: WAPE=69.6128 Bias=2.0251
+[diag][lightgbm-rawscale] trial2 params={'num_leaves': 8, 'min_child_samples': 1000, 'feature_fraction': 0.4, 'bagging_fraction': 0.4, 'bagging_freq': 1, 'lambda_l1': 0.0, 'lambda_l2': 0.0} 학습 시작...
+[diag][lightgbm-rawscale] trial2 완료: WAPE=69.2933 Bias=0.1945
+[diag][lightgbm-rawscale] trial3 params={'num_leaves': 31, 'min_child_samples': 100, 'feature_fraction': 0.4, 'bagging_fraction': 0.4, 'bagging_freq': 1, 'lambda_l1': 0.0, 'lambda_l2': 0.0} 학습 시작...
+[diag][lightgbm-rawscale] trial3 완료: WAPE=67.8351 Bias=3.4496
+[diag][lightgbm-rawscale] 저장 완료: C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hpo\_diag_rawscale_lightgbm_h1\p13_lightgbm_h1_rawscale.json
+
+=== log1p 재변환 편향 가설 검증 결과 (lightgbm h1) ===
+| 구분                           |  pooled_wape |  pooled_bias |
+|------------------------------------------------------------|
+| 기존 (log1p, trial3, best)     |        59.50 |       -31.63 |
+| 이번 (raw scale, trial3, 동일 trial) |        67.84 |         3.45 |
+
+bias 변화량: +35.08%p (부호 반전: True)
+=> bias가 유의미하게(20%p 이상) 줄었거나 부호가 바뀜: log1p/expm1 재변환 편향 가설을 지지하는 강한 증거
+
+결과 파일: C:\Users\82103\Desktop\GIthub\capstone-proj\outputs\hpo\_diag_rawscale_lightgbm_h1\p13_lightgbm_h1_rawscale.json
