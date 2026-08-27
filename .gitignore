@@ -23,3 +23,6 @@ outputs/audits/lightgbm_protocol_integration_summary.json
 outputs/hpo/*/_checkpoints/
 outputs/hpo/_queue_logs/
 !outputs/hpo/*/oof/*.parquet
+# Final model artifacts
+outputs/final_retrain/lightgbm_hurdle/*.joblib
+p13_results_all.txt
