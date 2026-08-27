@@ -1,0 +1,113 @@
+.ml-wrapper {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.ml-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.ml-table thead tr {
+  background: #f8fafc;
+  border-bottom: 2px solid var(--border);
+}
+
+.ml-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.ml-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s;
+}
+
+.ml-table tbody tr:last-child { border-bottom: none; }
+
+.ml-table tbody tr:hover { background: #f8fafc; }
+
+.ml-table td { padding: 12px 16px; color: var(--text); vertical-align: middle; }
+
+.barcode-col { font-family: 'Consolas', monospace; font-size: 12.5px; color: var(--text-muted); }
+.name-col    { font-weight: 500; }
+.num-col     { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ── Center tag ── */
+.center-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.center-a { background: #eff6ff; color: #2563eb; }
+.center-b { background: #f0fdf4; color: #059669; }
+
+/* ── Ratio bar ── */
+.ratio-col {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+
+.ratio-bar-track {
+  flex: 1;
+  height: 7px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ratio-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.ratio-ok   { background: var(--success); }
+.ratio-warn { background: var(--warning); }
+.ratio-bad  { background: var(--danger); }
+
+.ratio-pct {
+  width: 38px;
+  text-align: right;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* ── Status badge ── */
+.status-badge {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-ok   { background: #f0fdf4; color: var(--success); }
+.status-warn { background: #fffbeb; color: var(--warning); }
+.status-bad  { background: #fef2f2; color: var(--danger);  }
+
+/* ── Empty state ── */
+.ml-empty {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 60px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
