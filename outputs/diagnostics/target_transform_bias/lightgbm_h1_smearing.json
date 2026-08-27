@@ -1,0 +1,89 @@
+{
+  "family": "lightgbm",
+  "horizon": 1,
+  "seed": 42,
+  "source_trial_id": 3,
+  "source_trial_params": {
+    "num_leaves": 31,
+    "min_child_samples": 100,
+    "feature_fraction": 0.4,
+    "bagging_fraction": 0.4,
+    "bagging_freq": 1,
+    "lambda_l1": 0.0,
+    "lambda_l2": 0.0
+  },
+  "source_json_path": "outputs/hpo/lgbm/p13_lightgbm_h1.json",
+  "common_eval_key_path": "outputs/audits/p13/five_family_common_evaluation_keys.parquet",
+  "common_eval_key_count": 577319,
+  "fold_smearing": [
+    {
+      "fold_id": 1,
+      "smearing_factor": 1.3318308296221317,
+      "naive_wape": 62.95104441571956,
+      "naive_bias": -33.68261212069522,
+      "smearing_wape": 74.4002505713072,
+      "smearing_bias": -0.4010665425986938
+    },
+    {
+      "fold_id": 2,
+      "smearing_factor": 1.3183493919619744,
+      "naive_wape": 57.694498083179916,
+      "naive_bias": -31.24022264903827,
+      "smearing_wape": 69.20834173802594,
+      "smearing_bias": 0.6193369529783525
+    },
+    {
+      "fold_id": 3,
+      "smearing_factor": 1.306810531909558,
+      "naive_wape": 57.08149368645877,
+      "naive_bias": -31.617605968582275,
+      "smearing_wape": 65.70980138933363,
+      "smearing_bias": -0.9872065511922129
+    },
+    {
+      "fold_id": 4,
+      "smearing_factor": 1.296287293646786,
+      "naive_wape": 60.97316741829948,
+      "naive_bias": -30.15140334821292,
+      "smearing_wape": 71.93617580224105,
+      "smearing_bias": 1.47011011477866
+    }
+  ],
+  "pooled_metrics_common": {
+    "log1p_naive_existing_p13": {
+      "wape": 59.50443821221455,
+      "bias": -31.630703656061243,
+      "rmse": 12.922892725790831,
+      "mae": 1.7822729457487727,
+      "mase": 0.6081849891509289,
+      "source": "read_only_from_outputs/hpo/lgbm/p13_lightgbm_h1.json"
+    },
+    "log1p_naive_recomputed_this_run": {
+      "wape": 59.50443821221456,
+      "bias": -31.630703656061243,
+      "rmse": 12.922892725790833,
+      "mae": 1.7822729457487732,
+      "mase": 0.608184989150929,
+      "n": 577319,
+      "mase_n": 540822
+    },
+    "raw_target": {
+      "wape": 67.83509555203655,
+      "bias": 3.449558267587548,
+      "rmse": 12.088430020222148,
+      "mae": 2.0317922361270226,
+      "mase": 1.6351833230094628,
+      "n": 577319,
+      "mase_n": 540822
+    },
+    "log1p_smearing": {
+      "wape": 70.08462158489178,
+      "bias": 0.15711539199476837,
+      "rmse": 13.153304406324425,
+      "mae": 2.09916988911514,
+      "mase": 2.8428383371096837,
+      "n": 577319,
+      "mase_n": 540822
+    }
+  }
+}
