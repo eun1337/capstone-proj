@@ -23,3 +23,5 @@ outputs/audits/lightgbm_protocol_integration_summary.json
 outputs/hpo/*/_checkpoints/
 outputs/hpo/_queue_logs/
 !outputs/hpo/*/oof/*.parquet
+checkpoints/
+frontend/.vite/
