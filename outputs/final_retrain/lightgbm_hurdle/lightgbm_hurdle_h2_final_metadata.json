@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "family": "lightgbm_hurdle",
+  "horizon": 2,
+  "config": {
+    "classifier_hp": {
+      "num_leaves": 31,
+      "min_child_samples": 1000
+    },
+    "regressor_hp": {
+      "num_leaves": 31,
+      "min_child_samples": 100
+    },
+    "fixed_params_classifier": {
+      "learning_rate": 0.1,
+      "n_estimators": 100,
+      "max_depth": -1,
+      "boosting_type": "gbdt",
+      "objective": "binary",
+      "n_jobs": -1,
+      "verbosity": -1
+    },
+    "fixed_params_regressor": {
+      "learning_rate": 0.1,
+      "n_estimators": 100,
+      "max_depth": -1,
+      "boosting_type": "gbdt",
+      "objective": "regression",
+      "n_jobs": -1,
+      "verbosity": -1
+    },
+    "shared_fixed_params": {
+      "feature_fraction": 0.4,
+      "bagging_fraction": 0.4,
+      "bagging_freq": 1,
+      "lambda_l1": 0.0,
+      "lambda_l2": 0.0
+    },
+    "classifier_target": "y>0",
+    "conditional_target_transform": "log1p",
+    "final_combination": "probability_x_conditional_prediction",
+    "total_train_rows": 1642638,
+    "a_train_rows": 1483594,
+    "b_train_rows": 159044,
+    "train_week_st_min": "2021-01-04 00:00:00",
+    "train_week_st_max": "2023-12-11 00:00:00",
+    "positive_row_regressor_train_count": 435526,
+    "target_cutoff": "2024-01-01 00:00:00",
+    "b_history_start": "2023-07-03 00:00:00",
+    "target_transform": "log1p"
+  },
+  "seed": 42,
+  "model_artifact_path": "outputs/final_retrain/lightgbm_hurdle/lightgbm_hurdle_h2_final.joblib",
+  "training_population_size": 1642638,
+  "population_unit": "rows",
+  "fit_time_sec": 8.952821333019529,
+  "epochs_completed": null,
+  "validation_used": false,
+  "early_stopping_used": false,
+  "best_epoch_selection_used": false
+}

@@ -25,3 +25,6 @@ outputs/hpo/_queue_logs/
 !outputs/hpo/*/oof/*.parquet
 checkpoints/
 frontend/.vite/
+# Final model artifacts
+outputs/final_retrain/lightgbm_hurdle/*.joblib
+p13_results_all.txt

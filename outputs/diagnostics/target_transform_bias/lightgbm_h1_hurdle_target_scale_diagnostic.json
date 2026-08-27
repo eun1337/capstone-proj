@@ -1,0 +1,93 @@
+{
+  "family": "lightgbm",
+  "horizon": 1,
+  "source_trial_id": 3,
+  "source_trial_params": {
+    "num_leaves": 31,
+    "min_child_samples": 100,
+    "feature_fraction": 0.4,
+    "bagging_fraction": 0.4,
+    "bagging_freq": 1,
+    "lambda_l1": 0.0,
+    "lambda_l2": 0.0
+  },
+  "common_eval_key_count": 577319,
+  "pooled_metrics_common": {
+    "pred_hurdle_raw": {
+      "wape": 65.96778430211646,
+      "bias": 2.658769441558829,
+      "rmse": 12.03598923959562,
+      "mae": 1.9758626547039393,
+      "mase": 0.8874388425010874
+    },
+    "pred_hurdle_log": {
+      "wape": 60.19090718237725,
+      "bias": -18.80031973618829,
+      "rmse": 12.25235442637797,
+      "mae": 1.8028340183405962,
+      "mase": 0.6708735995512229
+    }
+  },
+  "zero_rows": {
+    "pred_hurdle_raw": {
+      "mean_pred": 0.6568927252912049,
+      "sum_pred": 300739.2843855447
+    },
+    "pred_hurdle_log": {
+      "mean_pred": 0.44958164715764615,
+      "sum_pred": 205827.9192833607
+    }
+  },
+  "nonzero_rows": {
+    "pred_hurdle_raw": {
+      "wape": 48.57578713897547,
+      "bias": -14.733227721582168
+    },
+    "pred_hurdle_log": {
+      "wape": 48.287711377461356,
+      "bias": -30.703515541104174
+    }
+  },
+  "by_demand_quartile": {
+    "Q1": {
+      "pred_hurdle_raw": {
+        "wape": 231.6287699459731,
+        "bias": 53.93726909128004
+      },
+      "pred_hurdle_log": {
+        "wape": 174.49846162441747,
+        "bias": -9.455949230245315
+      }
+    },
+    "Q2": {
+      "pred_hurdle_raw": {
+        "wape": 223.15307644775095,
+        "bias": 68.72501590562995
+      },
+      "pred_hurdle_log": {
+        "wape": 171.28364190638746,
+        "bias": 2.172393413689548
+      }
+    },
+    "Q3": {
+      "pred_hurdle_raw": {
+        "wape": 148.36910284550288,
+        "bias": 29.255861680338224
+      },
+      "pred_hurdle_log": {
+        "wape": 124.63107984907273,
+        "bias": -10.60344409475134
+      }
+    },
+    "Q4": {
+      "pred_hurdle_raw": {
+        "wape": 58.80147299759524,
+        "bias": 0.18269838572886526
+      },
+      "pred_hurdle_log": {
+        "wape": 54.79569788672983,
+        "bias": -19.53858290197131
+      }
+    }
+  }
+}
