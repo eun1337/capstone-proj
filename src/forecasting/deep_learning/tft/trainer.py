@@ -9,8 +9,11 @@ EarlyStopping 없이 max_epochs를 모두 학습한 마지막 epoch 모델을 �
 """
 
 import random
-import resource
 import sys
+if sys.platform != "win32":
+    import resource
+else:
+    import psutil
 import time
 from pathlib import Path
 
@@ -63,6 +66,9 @@ def set_all_seeds(seed: int) -> None:
 
 
 def _peak_ram_mb() -> float:
+    if sys.platform == "win32":
+        process = psutil.Process()
+        return process.memory_info().rss / (1024 * 1024)
     raw = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     return raw / (1024 * 1024) if sys.platform == "darwin" else raw / 1024
 
