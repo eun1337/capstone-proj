@@ -14,6 +14,15 @@
   transform: translateY(-2px);
 }
 
+/* KpiCard가 onClick을 받으면 <button>으로 렌더된다 — 기본 버튼 스타일을 카드 모양으로 리셋. */
+.kpi-card-clickable {
+  border: none;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
 /* ── Top row ── */
 .kpi-top {
   display: flex;
@@ -44,6 +53,40 @@
 .badge-up { background: #f0fdf4; color: #16a34a; }
 .badge-dn { background: #fef2f2; color: #dc2626; }
 
+.kpi-icon-circle {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+/* 전일 대비 = 증감률 → 증감액/건수/SKU수 순서로 한 줄 */
+.kpi-change-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11.5px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.kpi-change-label { color: #94a3b8; flex-shrink: 0; }
+
+.kpi-change-pct { font-weight: 700; flex-shrink: 0; }
+.kpi-up { color: #16a34a; }
+.kpi-dn { color: #dc2626; }
+
+.kpi-change-abs {
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ── Value ── */
 .kpi-value {
   font-size: 21px;
@@ -64,4 +107,10 @@
   margin-top: 6px;
   height: 38px;
   overflow: hidden;
+}
+
+.kpi-spark-caption {
+  margin-top: 2px;
+  font-size: 9.5px;
+  color: #94a3b8;
 }

@@ -1,0 +1,212 @@
+.ppm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 24px;
+}
+
+.ppm-modal {
+  width: 100%;
+  max-width: 760px;
+  max-height: 88vh;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ppm-hd {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 12px;
+  flex-shrink: 0;
+}
+
+.ppm-hd h3 { font-size: 17px; font-weight: 700; color: #1e293b; }
+.ppm-hd p { font-size: 12px; color: #64748b; margin-top: 3px; }
+
+.ppm-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.ppm-close:hover { background: #f1f5f9; color: #1e293b; }
+
+.ppm-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px 14px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.ppm-search {
+  flex: 1;
+  min-width: 180px;
+  padding: 7px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: #f8fafc;
+}
+
+.ppm-search:focus { border-color: #3b82f6; background: #fff; }
+
+.ppm-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ppm-filter-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  margin-right: 2px;
+}
+
+.ppm-sort-select {
+  padding: 5px 8px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 11.5px;
+  color: #374151;
+  outline: none;
+}
+
+.ppm-hint {
+  padding: 30px;
+  text-align: center;
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+.ppm-hint-error { color: #dc2626; }
+
+.ppm-table-scroll {
+  flex: 1;
+  min-height: 200px;
+  max-height: 420px;
+  overflow-y: auto;
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.ppm-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+}
+
+.ppm-table th {
+  padding: 8px 10px;
+  text-align: right;
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 11.5px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.ppm-table th.left { text-align: left; }
+.ppm-col-radio { width: 36px; }
+.ppm-col-unit { width: 56px; text-align: center; }
+
+.ppm-table td {
+  padding: 8px 10px;
+  text-align: right;
+  color: #374151;
+  border-bottom: 1px solid #f8fafc;
+  white-space: nowrap;
+}
+
+.ppm-table td.left { text-align: left; max-width: 260px; }
+.ppm-table tr { cursor: pointer; }
+.ppm-table tr:hover td { background: #f8fafc; }
+.ppm-row-active td { background: #eff6ff; }
+
+.ppm-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ppm-forecast-badge {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.ppm-forecast-yes { background: #dcfce7; color: #16a34a; }
+.ppm-forecast-no { background: #f1f5f9; color: #94a3b8; }
+
+.ppm-empty {
+  text-align: center;
+  color: #94a3b8;
+  padding: 24px !important;
+}
+
+.ppm-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  flex-shrink: 0;
+}
+
+.ppm-total { font-size: 12px; color: #94a3b8; }
+
+.ppm-footer-actions { display: flex; gap: 8px; }
+
+.ppm-btn {
+  padding: 8px 18px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+}
+
+.ppm-btn-ghost {
+  background: #fff;
+  border-color: #e2e8f0;
+  color: #64748b;
+}
+
+.ppm-btn-ghost:hover { background: #f8fafc; }
+
+.ppm-btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.ppm-btn-primary:hover { background: #1d4ed8; }
+.ppm-btn-primary:disabled { background: #cbd5e1; cursor: not-allowed; }

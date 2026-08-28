@@ -1,0 +1,49 @@
+.sdc-card { justify-content: flex-start; }
+
+.sdc-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+}
+
+.sdc-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.sdc-row-label { color: #94a3b8; flex-shrink: 0; }
+
+.sdc-row-value {
+  font-weight: 700;
+  color: #1e293b;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sdc-strong { font-weight: 700; }
+.sdc-muted { color: #94a3b8; font-weight: 500; }
+
+.sdc-unit-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #2563eb;
+  background: #dbeafe;
+  padding: 1px 8px;
+  border-radius: 10px;
+}
+
+.sdc-kan {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.sdc-up { color: #16a34a; font-weight: 700; }
+.sdc-dn { color: #dc2626; font-weight: 700; }
+.sdc-abs { color: #94a3b8; font-weight: 500; }
