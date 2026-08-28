@@ -3,3 +3,5 @@ uvicorn[standard]==0.29.0
 PyJWT==2.8.0
 pydantic==2.6.0
 python-multipart==0.0.9
+pandas>=2.2
+pyarrow>=15.0
