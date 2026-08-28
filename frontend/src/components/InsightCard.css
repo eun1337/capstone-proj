@@ -1,0 +1,274 @@
+/* ── Card shell ───────────────────────────────────────────────── */
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+}
+
+.ins-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px 14px 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  transition: box-shadow 0.14s;
+}
+
+.ins-card:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1); }
+
+.ins-card-hd {
+  flex-shrink: 0;
+}
+
+.ins-card-hd h4 {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* 단위 chip이 있는 카드/없는 카드 모두 이 슬롯을 항상 같은 높이로 차지해 본문(ranking list)
+   시작 위치를 카드 5개 전부 같은 선상에 맞춘다. chip이 없으면 빈 공간으로 남는다. */
+.ins-card-header-extra {
+  flex-shrink: 0;
+  min-height: 22px;
+}
+
+/* title → content(flex:1) → footer(상세보기) 구조 — 남는 세로 공간을 흡수해 버튼을
+   항상 카드 하단에 고정한다. 내부 콘텐츠(리스트/hint)는 위에서부터 자연스럽게 쌓인다.
+   header/footer는 flex-shrink:0으로 절대 찌그러지지 않고, 공간이 부족할 때는 이 영역만
+   줄어들어(ins-ranking-list의 min-height가 바닥) 버튼이 잘리지 않고 항상 온전히 보인다. */
+.ins-card-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.ins-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* ranking 목록 전용 — summary(Shortage의 큰 숫자 등)와 분리해 이 부분만 flex:1로 남는
+   세로 공간을 흡수한다. 행이 5개보다 적어도 다른 요소(요약/버튼) 정렬은 흐트러지지 않는다. */
+.ins-ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-height: 0;
+}
+
+.ins-hint {
+  padding: 12px 2px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.ins-hint-error { color: #dc2626; }
+
+.ins-hint-sub {
+  font-size: 10.5px;
+  color: #f87171;
+}
+
+.ins-detail-btn {
+  align-self: center;
+  margin-top: 2px;
+  padding: 4px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 20px;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  color: #2563eb;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.ins-detail-btn:hover { background: #eff6ff; border-color: #93c5fd; }
+
+/* ── Mini rows (카드 요약) — 5개 카드 전부 공유하는 grid: 단위 | 상품명/지역명 | 값 | 보조값.
+   행마다 독립된 grid지만 트랙 폭을 고정해 카드 내 5행은 물론 카드 사이에서도
+   단위/이름/값 영역이 같은 선상에 오게 한다. 보조값이 없는 카드(재고부족)는 4번째
+   트랙을 그냥 비워 둔다 — min-height로 1줄/2줄(지역 카드) 행 높이도 통일한다. */
+.ins-mini-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 78px 44px;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.ins-mini-unit {
+  font-size: 10px;
+  font-weight: 700;
+  color: #2563eb;
+  background: #dbeafe;
+  border-radius: 10px;
+  padding: 1px 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ins-mini-unit:empty { background: transparent; }
+
+.ins-mini-name-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.ins-mini-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #374151;
+  font-weight: 600;
+}
+
+.ins-mini-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-mini-val {
+  font-weight: 700;
+  color: #1e293b;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ins-mini-pct {
+  font-size: 10.5px;
+  color: #64748b;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Shortage 요약 큰 숫자 ────────────────────────────────────── */
+.ins-shortage-summary {
+  text-align: center;
+  padding: 2px 0 4px;
+}
+
+.ins-shortage-count {
+  font-size: 22px;
+  font-weight: 800;
+  color: #dc2626;
+  line-height: 1;
+}
+
+.ins-shortage-sub {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-top: 3px;
+}
+
+/* ── Modal 상세: 표/바 (여러 InsightModal 콘텐츠가 공유) ─────── */
+.ins-modal-total {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  padding-bottom: 4px;
+}
+
+.ins-modal-note {
+  font-size: 11.5px;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.ins-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.ins-detail-table th {
+  padding: 5px 6px;
+  text-align: right;
+  color: #94a3b8;
+  font-weight: 600;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.ins-detail-table th:first-child { text-align: left; }
+
+.ins-detail-table td {
+  padding: 5px 6px;
+  text-align: right;
+  color: #374151;
+  border-bottom: 1px solid #f8fafc;
+  white-space: nowrap;
+}
+
+.ins-detail-table td:first-child {
+  text-align: left;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ins-detail-table td.num { font-variant-numeric: tabular-nums; font-weight: 600; color: #1e293b; }
+
+.ins-clickable-row { cursor: pointer; }
+.ins-clickable-row:hover { background: #f8fafc; }
+.ins-row-active { background: #eff6ff; }
+
+.ins-bar-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.ins-bar-track {
+  width: 60px;
+  height: 6px;
+  background: #f1f5f9;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.ins-bar-fill {
+  height: 100%;
+  background: #3b82f6;
+  border-radius: 3px;
+}
+
+.ins-drilldown {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.ins-drilldown h4 {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 6px;
+}

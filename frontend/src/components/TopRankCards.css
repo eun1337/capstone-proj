@@ -1,0 +1,121 @@
+/* 대시보드 하단/우측 TOP5 카드 공용 row — 단위 배지 없이 이름(flex:1) + 값(고정폭 우측정렬).
+   min-height로 1줄/2줄(지역) 행 높이를 통일해 6개 카드의 행 간격이 다 같아 보이게 한다. */
+.trc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.trc-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #374151;
+  font-weight: 600;
+}
+
+.trc-name-group {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.trc-sub {
+  font-size: 10.5px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trc-val {
+  flex-shrink: 0;
+  min-width: 84px;
+  text-align: right;
+  font-weight: 700;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 카테고리 선택 시 상품별 매출 TOP5 상세 modal의 상품명/바코드 검색창 */
+.trc-search {
+  width: 100%;
+  padding: 7px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+
+.trc-search:focus { border-color: #3b82f6; background: #fff; }
+
+/* ── 전체보기 modal 표(각 카드 상세) 공용 ─────────────────────── */
+.trc-detail-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+/* AI 예측 상품 상세처럼 column이 많은 표는 상품명 컬럼을 더 넓게 확보한다
+   (modal 자체 폭도 InsightModal의 wide 옵션으로 함께 넓힌다). */
+.trc-detail-table-wide td.left,
+.trc-detail-table-wide th.left {
+  max-width: none;
+}
+.trc-detail-table-wide td.left:first-child {
+  width: 32%;
+}
+
+.trc-detail-table th {
+  padding: 6px 8px;
+  text-align: right;
+  color: #94a3b8;
+  font-weight: 600;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.trc-detail-table th.left { text-align: left; }
+
+.trc-detail-table td {
+  padding: 6px 8px;
+  text-align: right;
+  color: #374151;
+  border-bottom: 1px solid #f8fafc;
+  white-space: nowrap;
+}
+
+.trc-detail-table td.left {
+  text-align: left;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trc-detail-table td.num { font-variant-numeric: tabular-nums; font-weight: 600; color: #1e293b; }
+
+.trc-clickable-row { cursor: pointer; }
+.trc-clickable-row:hover td { background: #f8fafc; }
+
+.trc-empty-row {
+  text-align: center !important;
+  color: #94a3b8;
+  padding: 14px 4px !important;
+}

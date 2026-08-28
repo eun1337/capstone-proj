@@ -1,0 +1,237 @@
+.kpi-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.kpi-modal {
+  width: 100%;
+  max-width: 680px;
+  max-height: 85vh;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.kpi-modal-hd {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0;
+}
+
+.kpi-modal-hd h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.kpi-modal-hd p {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.kpi-modal-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 15px;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.kpi-modal-close:hover { background: #f1f5f9; color: #1e293b; }
+
+.kpi-modal-body {
+  padding: 16px 20px 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kpi-modal-desc {
+  font-size: 12.5px;
+  color: #374151;
+  line-height: 1.5;
+}
+
+.kpi-modal-formula {
+  font-size: 11.5px;
+  color: #64748b;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.kpi-modal-values {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid #f1f5f9;
+  padding-top: 10px;
+}
+
+.kpi-modal-value-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: #64748b;
+  padding: 3px 0;
+}
+
+.kpi-modal-value-row strong {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.kpi-modal-value-row-primary {
+  background: #eff6ff;
+  border-radius: 8px;
+  padding: 5px 8px;
+  margin: 0 -8px;
+  color: #1e40af;
+}
+
+.kpi-modal-value-row-primary strong { color: #1e40af; }
+
+/* ── 상품 목록 ─────────────────────────────────────────────── */
+.kpi-modal-list-section {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 10px;
+}
+
+.kpi-modal-list-hd {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.kpi-modal-list-hd h4 {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.kpi-modal-list-count {
+  font-size: 10.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.kpi-modal-list-hint {
+  padding: 14px 4px;
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.kpi-modal-search {
+  width: 100%;
+  padding: 7px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: #374151;
+  outline: none;
+  background: #f8fafc;
+  margin-bottom: 8px;
+}
+
+.kpi-modal-search:focus { border-color: #3b82f6; background: #fff; }
+
+/* 상품 목록만 자체 스크롤 영역을 가져, 정의/요약값은 항상 보이고 목록만 내부 스크롤된다. */
+.kpi-modal-table-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+}
+
+.kpi-modal-table {
+  width: 100%;
+  /* border-collapse:collapse + position:sticky th는 일부 브라우저에서 sticky가 아예
+     동작하지 않는 문제가 있어(재고 modal과 동일 원인) separate+spacing:0으로 맞춘다. */
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.kpi-modal-table th {
+  padding: 6px 8px;
+  text-align: right;
+  color: #94a3b8;
+  font-weight: 600;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+  /* 목록 내부 스크롤(.kpi-modal-table-scroll) 상단에 헤더 고정 */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.kpi-modal-table th.left { text-align: left; }
+
+/* 단위(EA/BX/CS) 컬럼을 가장 왼쪽 고정폭으로 — 상품명 길이와 무관하게 항상 같은 자리. */
+.kpi-modal-table th.unit,
+.kpi-modal-table td.unit {
+  width: 56px;
+  min-width: 56px;
+  text-align: center;
+}
+
+.kpi-modal-table td {
+  padding: 5px 8px;
+  text-align: right;
+  color: #374151;
+  border-bottom: 1px solid #f8fafc;
+  white-space: nowrap;
+}
+
+.kpi-modal-table td.left {
+  text-align: left;
+  max-width: 240px;
+}
+
+.kpi-modal-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.kpi-modal-unit-badge {
+  font-size: 10px;
+  font-weight: 700;
+  color: #2563eb;
+  background: #dbeafe;
+  padding: 1px 6px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.kpi-modal-table tr:hover td { background: #f8fafc; }
