@@ -1,6 +1,12 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
+import AnalysisLayout from './pages/analysis/AnalysisLayout.jsx';
+import Overview from './pages/analysis/Overview.jsx';
+import StatModelAnalysis from './pages/analysis/StatModelAnalysis.jsx';
+import MlDlAnalysis from './pages/analysis/MlDlAnalysis.jsx';
+import ModelComparison from './pages/analysis/ModelComparison.jsx';
+import DetailQnA from './pages/analysis/DetailQnA.jsx';
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token');
@@ -20,6 +26,21 @@ export default function App() {
             </PrivateRoute>
           }
         />
+        <Route
+          path="/analysis"
+          element={
+            <PrivateRoute>
+              <AnalysisLayout />
+            </PrivateRoute>
+          }
+        >
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<Overview />} />
+          <Route path="stat" element={<StatModelAnalysis />} />
+          <Route path="ml-dl" element={<MlDlAnalysis />} />
+          <Route path="comparison" element={<ModelComparison />} />
+          <Route path="detail" element={<DetailQnA />} />
+        </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

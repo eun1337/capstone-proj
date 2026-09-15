@@ -1,0 +1,91 @@
+.az-page-hd {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.az-page-hd h2 { font-size: 19px; font-weight: 700; color: #1e293b; }
+.az-page-hd p { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+
+.az-filter-bar { display: flex; gap: 10px; flex-wrap: wrap; }
+
+.az-filter-group { display: flex; align-items: center; gap: 6px; }
+
+.az-filter-label { font-size: 11.5px; font-weight: 600; color: #94a3b8; }
+
+.az-filter-select {
+  padding: 4px 8px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  outline: none;
+}
+
+.az-filter-select:focus { border-color: #3b82f6; }
+
+.az-grid { display: grid; gap: 12px; }
+.az-grid-1-2-1 { grid-template-columns: 1fr 2fr 1fr; }
+.az-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+.az-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.az-card-hd { margin-bottom: 10px; }
+.az-card-hd h3 { font-size: 14.5px; font-weight: 700; color: #1e293b; margin-bottom: 2px; }
+.az-card-hd p { font-size: 11.5px; color: #94a3b8; }
+
+.az-hint { padding: 30px 0; text-align: center; font-size: 13px; color: #94a3b8; }
+.az-hint-error { color: #dc2626; }
+
+.az-detail-select {
+  padding: 3px 8px;
+  border: 1.5px solid #dbeafe;
+  border-radius: 20px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 11.5px;
+  font-weight: 700;
+  cursor: pointer;
+  outline: none;
+}
+
+.az-detail-title {
+  font-size: 18px;
+  font-weight: 800;
+  color: #1e293b;
+  margin-bottom: 10px;
+}
+
+.az-detail-row { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+.az-detail-row:last-child { border-bottom: none; }
+.az-detail-label { width: 56px; flex-shrink: 0; font-size: 11.5px; font-weight: 700; color: #94a3b8; }
+.az-detail-value { font-size: 12.5px; color: #374151; line-height: 1.5; }
+
+.az-stub {
+  background: #fff;
+  border-radius: 12px;
+  border: 2px dashed #e2e8f0;
+  min-height: 400px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.az-stub-inner { text-align: center; }
+.az-stub-icon { font-size: 40px; margin-bottom: 10px; }
+.az-stub-inner h3 { font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 6px; }
+.az-stub-inner p { font-size: 13px; color: #94a3b8; }
