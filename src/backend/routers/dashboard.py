@@ -1287,6 +1287,8 @@ class DailySparklinePoint(BaseModel):
     sales_amount:        float
     return_amount:        float
     net_sales_amount:    float
+    sales_record_count:  int
+    active_sku_count:    int
 
 
 class DailySummaryResponse(BaseModel):
@@ -1363,6 +1365,12 @@ def get_daily_summary(
             dd.groupby("date")[["sales_amount", "return_amount", "net_sales_amount"]]
             .sum().sort_index().reset_index()
         )
+        # SPARK_판매SKU수 — 스코프 안에 SKU가 이 하나뿐이므로, 그날 팔렸으면(sales_qty>0) 1, 아니면 0.
+        active_sku_count_by_date = (
+            dd[dd["sales_qty"] > 0]
+            .drop_duplicates(["center_id", "sku_id", "date"])
+            .groupby("date").size()
+        )
     else:
         # serving derivative(daily_summary_agg, canonical 31M을 미리 (center,date,KAN 3단,
         # option_code) 단위로 합산해 활동 없는 조합을 제거한 sparse 집계) 경로 — 실제 frontend가
@@ -1396,6 +1404,9 @@ def get_daily_summary(
         dd_at_date = dd[dd["date"] == basis_date]
         # active_sku_count/총액류는 순수 합산이라 활동 없는(0) 조합을 미리 제거해도 값이 그대로다.
         active_sku_count = int(dd_at_date["active_sku_count"].sum())
+        # SPARK_판매SKU수 — daily_summary_agg가 이미 (center,date,KAN 3단,option_code)별
+        # active_sku_count를 갖고 있으므로 날짜로만 다시 합치면 스코프 전체의 일별 추이가 된다.
+        active_sku_count_by_date = dd.groupby("date")["active_sku_count"].sum()
 
         # sales_qty_by_unit는 "그 날 존재했지만 값이 0"인 unit도 canonical(dense grid)에서는
         # 명시적으로 나타난다 — sparse 집계에는 그런 0행이 아예 없으므로, grid_scope에서
@@ -1422,29 +1433,34 @@ def get_daily_summary(
     net_sales_amount = float(dd_at_date["net_sales_amount"].sum())
     return_rate_amount = (return_amount / total_sales_amount) if total_sales_amount > 0 else None
 
-    sparkline = [
-        DailySparklinePoint(
-            date=row.date.date(),
-            sales_amount=row.sales_amount,
-            return_amount=row.return_amount,
-            net_sales_amount=row.net_sales_amount,
-        )
-        for row in spark_df.itertuples(index=False)
-    ]
-
     forecast_basis_week = resolve_forecast_basis_week_for_date(basis_date)
 
     # 판매건수 — 원본 매출 기록(raw transaction) 행 수 기준. daily_summary_agg/daily_demand는
     # 이미 SKU-day 단위로 합쳐져 있어 "몇 건의 판매 기록이 있었는지"를 알 수 없으므로,
     # region-sales와 동일하게 raw 파일에서 직접 센다(수량>0 행만 — 새 계산이 아니라 단순 count,
     # 주문번호가 없는 데이터라 주문건수가 아닌 판매기록 행수로 정의한다).
+    # SPARK_판매건수용으로 basis_date 하루가 아니라 스파크라인 구간 전체(spark_start~basis_date)를
+    # 한 번에 긁어 날짜별로 집계한다 — raw를 여러 번 스캔하지 않기 위함.
     valid_sku_keys = set(zip(pm["center_id"], pm["sku_id"]))
     raw = _filter_by_center(load_sales_transactions_raw(), center)
-    raw = raw[(raw["거래일"] == basis_date) & (raw["수량"] > 0)]
+    raw = raw[(raw["거래일"] >= spark_start) & (raw["거래일"] <= basis_date) & (raw["수량"] > 0)]
     matched = pd.Series(
         [k in valid_sku_keys for k in zip(raw["center_id"], raw["sku_id"])], index=raw.index, dtype=bool,
     )
-    sales_record_count = int(matched.sum())
+    record_count_by_date = raw[matched].groupby("거래일").size()
+    sales_record_count = int(record_count_by_date.get(basis_date, 0))
+
+    sparkline = [
+        DailySparklinePoint(
+            date=row.date.date(),
+            sales_amount=row.sales_amount,
+            return_amount=row.return_amount,
+            net_sales_amount=row.net_sales_amount,
+            sales_record_count=int(record_count_by_date.get(row.date, 0)),
+            active_sku_count=int(active_sku_count_by_date.get(row.date, 0)),
+        )
+        for row in spark_df.itertuples(index=False)
+    ]
 
     return DailySummaryResponse(
         date=basis_date.date(),

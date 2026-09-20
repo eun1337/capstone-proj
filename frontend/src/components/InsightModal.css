@@ -11,7 +11,8 @@
 
 .ins-modal {
   width: 100%;
-  max-width: 640px;
+  /* 컬럼이 5~6개인 표도 가로 스크롤 없이 한 화면에 들어오도록 넉넉히 확보(Tailwind max-w-6xl 상당) */
+  max-width: min(1024px, 90vw);
   max-height: 85vh;
   background: #fff;
   border-radius: 14px;
@@ -22,7 +23,7 @@
 }
 
 /* column이 많은 표(AI 예측 상품 상세 등)를 데스크톱에서 한 화면에 보이게 넓힌 변형 */
-.ins-modal-wide { max-width: 920px; }
+.ins-modal-wide { max-width: min(1280px, 94vw); }
 
 .ins-modal-hd {
   display: flex;
@@ -44,6 +45,14 @@
   font-size: 12px;
   color: #64748b;
   margin-top: 2px;
+}
+
+/* headerExtra(예: 표/지도 뷰 토글) + 닫기 버튼을 같은 줄 우측에 묶는다 */
+.ins-modal-hd-right {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .ins-modal-close {

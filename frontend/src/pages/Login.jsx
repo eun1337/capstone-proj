@@ -72,7 +72,7 @@ export default function Login() {
 
         <div className="login-hint">
           <span>테스트 계정</span>
-          <code>admin / password123</code>
+          <code>adminid / adminpw</code>
         </div>
       </div>
     </div>

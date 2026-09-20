@@ -32,11 +32,13 @@ function CategoryTreeNode({ node, path, depth, selectedPath, onSelect, openMap, 
         className={`cat-btn depth-${depth} ${isSelected ? 'cat-active' : ''}`}
         onClick={() => { if (hasKids && !searchActive) onToggle(key); onSelect(path); }}
       >
-        <span className="cat-label-wrap">
-          <span>{node.label}</span>
+        <span className="cat-label">{node.label}</span>
+        {/* 건수 뱃지 + 토글 화살표를 한 그룹으로 묶어 항상 고정 gap을 유지한다 —
+            화살표가 펼침 상태에서 회전해도 숫자와 맞닿지 않는다. */}
+        <span className="cat-right">
           <span className="cat-count">{node.sku_count.toLocaleString()}</span>
+          {hasKids && !searchActive && <span className={`cat-chevron ${isOpen ? 'open' : ''}`}>›</span>}
         </span>
-        {hasKids && !searchActive && <span className={`cat-chevron ${isOpen ? 'open' : ''}`}>›</span>}
       </button>
       {hasKids && isOpen && (
         <div>
@@ -67,7 +69,7 @@ export default function CategorySidebar({
   return (
     <aside className="sidebar">
       <div className="sidebar-hd">
-        <span>KAN 표준 분류</span>
+        <span>카테고리</span>
       </div>
       <div className="sidebar-search">
         <input
@@ -87,8 +89,8 @@ export default function CategorySidebar({
             className={`cat-btn depth-0 ${selectedPath.length === 0 ? 'cat-active' : ''}`}
             onClick={() => onSelectCategory([])}
           >
-            <span className="cat-label-wrap">
-              <span>전체</span>
+            <span className="cat-label">전체</span>
+            <span className="cat-right">
               <span className="cat-count">{totalSkuCount.toLocaleString()}</span>
             </span>
           </button>

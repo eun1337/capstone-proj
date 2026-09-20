@@ -57,6 +57,10 @@ export default function Dashboard() {
   // 있고 "전체"는 없다 — 서로 다른 barcode의 별도 SKU라 합산/환산하지 않는다.
   const [topUnit, setTopUnit] = useState('EA');
   const [activeTab, setActiveTab] = useState('dashboard');
+  // 수요예측 추이 차트 조회 기간(주) — HistoryRangeControl의 7일/30일/90일 프리셋
+  // (각각 1/4/13주) 또는 직접 선택한 시작일로 갱신된다. 기본값은 "30일" 프리셋과 일치시켜
+  // 첫 진입 화면에서부터 버튼 하나가 active로 보이게 한다.
+  const [historyWeeks, setHistoryWeeks] = useState(4);
 
   const [categoryTree, setCategoryTree] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -257,13 +261,13 @@ export default function Dashboard() {
     setDemandTrendError(null);
     api.getDemandTrend({
       center, option_code: topUnit, category_large: large, category_middle: middle, category_small: small,
-      week_st: aiBasisWeek, history_weeks: 12,
+      week_st: aiBasisWeek, history_weeks: historyWeeks,
     })
       .then((data) => { if (!ignore) setDemandTrend(data); })
       .catch((e) => { if (!ignore) { setDemandTrendError(e.message); setDemandTrend(null); } })
       .finally(() => { if (!ignore) setDemandTrendLoading(false); });
     return () => { ignore = true; };
-  }, [center, large, middle, small, aiBasisWeek, topUnit, selectedSku]);
+  }, [center, large, middle, small, aiBasisWeek, topUnit, selectedSku, historyWeeks]);
 
   // ── SKU 선택 모드 전용 데이터 ──────────────────────────────────
   const [forecast, setForecast] = useState(null);
@@ -370,13 +374,28 @@ export default function Dashboard() {
     navigate('/');
   }
 
+  // IN-SIGHT 로고 클릭 — 센터/기준일/단위/카테고리·상품 선택/탭 등 모든 화면 상태를
+  // 최초 진입 시 기본값으로 되돌린다("홈으로" 개념). 로그인 세션은 건드리지 않는다.
+  function handleLogoClick() {
+    setActiveTab('dashboard');
+    setCenter('A');
+    setOperationalDate(DEFAULT_OPERATIONAL_DATE);
+    setTopUnit('EA');
+    setHistoryWeeks(12);
+    setSelectedPath([]);
+    setOpenMap({});
+    setCategorySearch('');
+    setSelectedSku(null);
+    setShowProductPicker(false);
+  }
+
   return (
     <div className="dash-root">
       <header className="dash-header">
-        <div className="header-brand">
+        <button type="button" className="header-brand" onClick={handleLogoClick} title="대시보드 초기 화면으로">
           <span className="brand-icon">📦</span>
           <span className="brand-name">IN-SIGHT</span>
-        </div>
+        </button>
         <nav className="header-nav">
           {TABS.map((t) => (
             <button
@@ -455,6 +474,7 @@ export default function Dashboard() {
               inventory={inventory} inventoryLoading={inventoryLoading} inventoryError={inventoryError}
               transactions={transactions} transactionsLoading={transactionsLoading} transactionsError={transactionsError}
               onSelectCategoryFromRanking={handleSelectCategoryFromRanking}
+              historyWeeks={historyWeeks} onHistoryWeeksChange={setHistoryWeeks}
             />
           )}
           {activeTab === 'tableau' && <TableauView onBack={() => setActiveTab('dashboard')} />}

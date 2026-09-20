@@ -4,8 +4,8 @@ from pydantic import BaseModel
 router = APIRouter()
 
 MOCK_USERS = {
-    "admin": "password123",
-    "user":  "user123",
+    "adminid": "adminpw",
+    "user":    "user123",
 }
 
 

@@ -21,21 +21,30 @@
 
 .ins-card:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1); }
 
+/* 타이틀(1행)과 헤더 보조 컨트롤(2행, 있을 때만)을 위아래로 쌓는다 — 같은 줄에 두면
+   폭이 좁은 카드에서 타이틀이 말줄임표로 잘려서(판매 급증 상품 TOP 5 등) 분리했다.
+   headerExtra가 없는 카드는 h4 한 줄만 있으므로 기존과 똑같이 보인다. */
 .ins-card-hd {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .ins-card-hd h4 {
-  font-size: 12.5px;
+  font-size: 16px;
   font-weight: 700;
   color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* 단위 chip이 있는 카드/없는 카드 모두 이 슬롯을 항상 같은 높이로 차지해 본문(ranking list)
-   시작 위치를 카드 5개 전부 같은 선상에 맞춘다. chip이 없으면 빈 공간으로 남는다. */
+/* 정렬 토글 등 헤더 보조 컨트롤 — 타이틀 바로 아래 줄, 카드 우측 끝에 붙는다 */
 .ins-card-header-extra {
   flex-shrink: 0;
-  min-height: 22px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 /* title → content(flex:1) → footer(상세보기) 구조 — 남는 세로 공간을 흡수해 버튼을

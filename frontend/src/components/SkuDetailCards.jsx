@@ -60,7 +60,10 @@ export function ProductInfoCard({ sku }) {
 // ── 2행 우측: 현재 상태 (SKU 선택 시 판매지역별 매출 TOP5 자리를 대체) ──────────
 // 추정재고/1주 예상수요/부족수량은 기존 /insights/inventory-shortage와 동일한 정의
 // (max(h1_pred - 추정재고, 0))을 그대로 재사용한다 — 새 계산식이 아니다.
-export function CurrentStatusCard({ unit, estimatedInventory, h1Pred, todayReturnQty, inventoryAvailable }) {
+export function CurrentStatusCard({
+  unit, estimatedInventory, h1Pred, todayReturnQty, inventoryAvailable,
+  todayReturnAmount, prevReturnAmount, returnAmountDayPct, returnAmountDayAbsText,
+}) {
   const shortageQty = (estimatedInventory !== null && h1Pred !== null)
     ? Math.max(h1Pred - estimatedInventory, 0)
     : null;
@@ -70,6 +73,9 @@ export function CurrentStatusCard({ unit, estimatedInventory, h1Pred, todayRetur
       <Row label="1주 예상수요" value={h1Pred !== null ? `${fmtNum1(h1Pred)} ${unit}` : '예측 없음'} />
       <Row label="부족수량" value={shortageQty !== null ? `${fmtNum1(shortageQty)} ${unit}` : '-'} />
       <Row label="조회일 반품수량" value={`${fmtNum(todayReturnQty)} ${unit}`} />
+      <Row label="조회일 반품금액" value={fmtWon(todayReturnAmount)} />
+      <Row label="전일 반품금액" value={prevReturnAmount !== null ? fmtWon(prevReturnAmount) : '-'} />
+      <ChangeRow label="전일 대비(반품금액)" pct={returnAmountDayPct} absText={returnAmountDayAbsText} />
     </InfoCard>
   );
 }

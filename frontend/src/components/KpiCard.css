@@ -1,11 +1,12 @@
 .kpi-card {
   background: #fff;
   border-radius: 12px;
-  padding: 14px 16px 10px;
+  /* x축 날짜 영역 바로 아래로 최소한의 여백만 남긴다 */
+  padding: 14px 16px 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 2px;
   transition: box-shadow 0.18s, transform 0.18s;
 }
 
@@ -14,31 +15,78 @@
   transform: translateY(-2px);
 }
 
-/* KpiCard가 onClick을 받으면 <button>으로 렌더된다 — 기본 버튼 스타일을 카드 모양으로 리셋. */
+/* KpiCard가 onClick을 받으면 role="button" div로 렌더된다(내부 기간토글 <button>과의
+   중첩을 피하기 위해 <button>이 아닌 div를 쓴다) — 기본 카드 모양 위에 클릭 커서만 추가. */
 .kpi-card-clickable {
-  border: none;
-  width: 100%;
-  text-align: left;
-  font: inherit;
   cursor: pointer;
 }
 
-/* ── Top row ── */
+/* ── Top row: [타이틀] ······ [기간 토글(7일/30일)] — 아이콘은 완전히 제거했다 ── */
 .kpi-top {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 6px;
+  gap: 8px;
 }
 
 .kpi-label {
-  font-size: 11px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 기간 토글 — 30일 뷰에서는 "7일"(누르면 7일 뷰로), 7일 뷰에서는 "30일"(누르면 복귀) */
+.kpi-range-btn {
+  flex-shrink: 0;
+  font-size: 10px;
   font-weight: 700;
   color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  line-height: 1.3;
-  flex: 1;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s, color 0.14s, border-color 0.14s;
+}
+
+.kpi-range-btn:hover {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
+/* ── Value row: [강조 수치] [전주 대비 배지] ── */
+.kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-top: 3px;
+}
+
+.kpi-value {
+  font-size: 23px;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.kpi-wow {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.kpi-wow-label {
+  font-size: 10px;
+  color: #94a3b8;
+  white-space: nowrap;
 }
 
 .kpi-badge {
@@ -53,33 +101,27 @@
 .badge-up { background: #f0fdf4; color: #16a34a; }
 .badge-dn { background: #fef2f2; color: #dc2626; }
 
-.kpi-icon-circle {
-  flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
+/* 일평균 — 현재 조회 기간(7일/30일)의 평균값. 차트 안에는 텍스트를 넣지 않고
+   여기, 메인 수치 바로 아래에만 표시한다. */
+.kpi-avg-row {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #64748b;
+  margin-top: 1px;
 }
 
-/* 전일 대비 = 증감률 → 증감액/건수/SKU수 순서로 한 줄 */
+/* 전일 대비 증감액(건수/SKU수 포함) — 증감률은 위(전주 대비 배지)에서 보여주므로 여기는 보조값만 */
 .kpi-change-row {
   display: flex;
   align-items: baseline;
   gap: 6px;
   font-size: 11.5px;
-  margin-top: 2px;
+  margin-top: 1px;
   white-space: nowrap;
   overflow: hidden;
 }
 
 .kpi-change-label { color: #94a3b8; flex-shrink: 0; }
-
-.kpi-change-pct { font-weight: 700; flex-shrink: 0; }
-.kpi-up { color: #16a34a; }
-.kpi-dn { color: #dc2626; }
 
 .kpi-change-abs {
   color: #94a3b8;
@@ -87,30 +129,111 @@
   text-overflow: ellipsis;
 }
 
-/* ── Value ── */
-.kpi-value {
-  font-size: 21px;
-  font-weight: 800;
-  color: #1e293b;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+/* ── Sparkline (Area chart) ── */
+.kpi-spark {
+  /* 일평균(및 전일 대비) 서브텍스트와 그래프 사이 간격을 넉넉히 띄운다 */
+  margin-top: 16px;
 }
 
-/* ── Sub ── */
-.kpi-pw {
+.kpi-spark-outer {
+  /* 값 pill(위)과 날짜 배지(아래 x축)이 서로 다른 물리적 영역에 뜨도록, 차트(wrap)와
+     x축(axis)을 분리된 두 블록으로 둔다 — 상/하 어떤 값이든 절대 겹치지 않는다. */
+  display: flex;
+  flex-direction: column;
+}
+
+.kpi-spark-wrap {
+  position: relative;
+  height: 44px;           /* 원 강조(r) / 호버 dot이 overflow:visible로 살짝 넘칠 여지 확보 */
+  overflow: visible;
+  line-height: 0;
+  cursor: crosshair;
+}
+
+.kpi-spark-wrap svg,
+.kpi-spark-wrap .recharts-wrapper {
+  cursor: crosshair;
+  /* 마지막 포인트의 후광(halo, r=9.5)이 SVG 뷰포트 자체에 잘리지 않도록 강제로 열어준다
+     (Recharts 내부 dot clipPath는 XAxis padding으로 별도 확보). */
+  overflow: visible !important;
+}
+
+/* 호버 크로스헤어(세로 점선 가이드) — Recharts 상태와 무관하게 우리가 직접 계산한
+   위치에 그리는 독립 오버레이라 항상 즉시 반응한다. */
+.kpi-spark-crosshair {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed #94a3b8;
+  pointer-events: none;
+}
+
+/* 호버 하이라이트 서클 — 흰 배경 + 테마색 테두리, 정확한 데이터 포인트 위치에 찍힌다 */
+.kpi-spark-hover-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  margin-left: -3.5px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid;
+  pointer-events: none;
+}
+
+/* 값 pill — 차트 바로 위에 뜨는 다크 슬레이트 알약, 숫자만 단독 표시. width는 지정하지
+   않고(w-auto) 내용만큼 자연스럽게 늘어나며, JS가 재는 실제 폭 기준으로만 위치를 보정한다
+   (translateX(calc(-50% + Npx))는 JSX 인라인 style에서 계산). */
+.kpi-spark-value-pill {
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 6px;
+  background: rgba(30, 41, 59, 0.95); /* slate-800/95 */
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  width: max-content;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);
+  font-variant-numeric: tabular-nums;
+  z-index: 5;
+}
+
+/* x축 — 평소엔 양 끝 날짜만 옅게, 호버 중엔 강조 배지가 그 자리로 이동해 표시된다 */
+.kpi-spark-axis {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 14px;
+  margin-top: 4px;
+}
+
+.kpi-spark-axis-edge {
   font-size: 11px;
   color: #94a3b8;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ── Sparkline ── */
-.kpi-spark {
-  margin-top: 6px;
-  height: 38px;
-  overflow: hidden;
-}
-
-.kpi-spark-caption {
-  margin-top: 2px;
-  font-size: 9.5px;
-  color: #94a3b8;
+/* 호버 중인 지점의 날짜 — x축 라인과 잘 어울리는 슬림한 라이트 톤 배지(값 pill과 위계 대비) */
+.kpi-spark-date-pill {
+  position: absolute;
+  top: 50%;
+  background: #f1f5f9; /* slate-100 */
+  color: #334155; /* slate-700 */
+  border: 1px solid #e2e8f0; /* slate-200 */
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 999px;
+  width: max-content;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  font-variant-numeric: tabular-nums;
+  z-index: 5;
 }

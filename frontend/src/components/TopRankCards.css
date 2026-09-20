@@ -46,6 +46,123 @@
   white-space: nowrap;
 }
 
+/* ── In-cell bar row (카테고리/지역/재고부족 TOP5 메인 카드) ─────
+   행 배경에 1위 기준 비율(%) 막대를 깔고, 텍스트는 그 위(z-index)에 그대로 얹는다. */
+.trc-bar-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 0 7px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.trc-bar-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 6px;
+  transition: width 0.35s ease;
+}
+
+.trc-bar-blue .trc-bar-fill {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.16), rgba(59, 130, 246, 0.03));
+}
+
+.trc-bar-amber .trc-bar-fill {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.20), rgba(245, 158, 11, 0.04));
+}
+
+.trc-bar-red .trc-bar-fill {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.22), rgba(239, 68, 68, 0.05));
+}
+
+.trc-bar-label {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.trc-bar-label-main {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trc-bar-sub {
+  font-size: 10px;
+  color: #94a3b8;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.trc-bar-val {
+  position: relative;
+  z-index: 1;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+
+.trc-bar-amber .trc-bar-val { color: #b45309; }
+.trc-bar-red .trc-bar-val { color: #b91c1c; }
+
+/* ── 판매 증가 TOP5: 증감 배지 ── */
+.trc-badge-up {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #16a34a;
+  background: #f0fdf4;
+  border-radius: 20px;
+  padding: 2px 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 오늘 반품수량 TOP5: 단순 숫자 칩 ── */
+.trc-chip {
+  flex-shrink: 0;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #475569;
+  background: #f1f5f9;
+  border-radius: 20px;
+  padding: 2px 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── AI 예측 상품 TOP5: 순위 배지 ── */
+.trc-row-ranked { gap: 9px; }
+
+.trc-rank-badge {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.trc-rank-badge-purple { background: #ede9fe; color: #7c3aed; }
+
+.trc-val-mono { font-variant-numeric: tabular-nums; }
+
 /* 카테고리 선택 시 상품별 매출 TOP5 상세 modal의 상품명/바코드 검색창 */
 .trc-search {
   width: 100%;
@@ -93,6 +210,42 @@
 }
 
 .trc-detail-table th.left { text-align: left; }
+
+/* 정렬 토글(증가수량순/증가율순) — 메인 카드 헤더(InsightCard의 headerExtra 슬롯, 타이틀과
+   같은 줄 우측 끝)와 상세보기 모달 상단(테이블 바로 위 우측)에서 동일하게 재사용한다. */
+.trc-sort-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.trc-sort-btn {
+  padding: 2px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s;
+}
+
+.trc-sort-btn:hover { background: #f8fafc; }
+
+.trc-sort-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* 모달 상단의 정렬 토글 배치 — 테이블 바로 위, 우측 정렬 */
+.trc-modal-sort-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 4px;
+}
 
 .trc-detail-table td {
   padding: 6px 8px;

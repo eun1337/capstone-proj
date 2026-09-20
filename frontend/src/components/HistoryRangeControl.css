@@ -1,0 +1,111 @@
+.hrc-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+/* 좌측 날짜범위 pill */
+.hrc-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.14s, background 0.14s;
+}
+
+.hrc-pill:hover { background: #f8fafc; border-color: #cbd5e1; }
+
+.hrc-pill svg { flex-shrink: 0; color: #94a3b8; }
+
+.hrc-pill-label {
+  font-weight: 600;
+  color: #64748b;
+}
+
+.hrc-pill-value {
+  font-weight: 700;
+  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 시작일 직접 선택 팝오버 */
+.hrc-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.14);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 210px;
+}
+
+.hrc-popover-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.hrc-popover-input {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 12.5px;
+  color: #1e293b;
+  outline: none;
+}
+
+.hrc-popover-input:focus { border-color: #3b82f6; }
+
+.hrc-popover-hint {
+  font-size: 10px;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+/* 우측 7일/30일/90일 프리셋 버튼 그룹 */
+.hrc-presets {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 8px;
+  border-left: 1px solid #e2e8f0;
+}
+
+.hrc-preset-btn {
+  padding: 4px 11px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #64748b;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.14s;
+}
+
+.hrc-preset-btn:hover { background: #f8fafc; }
+
+.hrc-preset-btn.active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+}

@@ -8,14 +8,15 @@ import './InsightCard.css';
 export default function InsightCard({ title, headerExtra, loading, error, isEmpty, emptyMessage, onOpenDetail, children }) {
   return (
     <div className="ins-card" onClick={onOpenDetail} role="button" tabIndex={0}>
+      {/* 타이틀과 헤더 보조 컨트롤(정렬 토글 등)을 같은 줄에 좌/우로 배치한다 — headerExtra가
+          없는 카드는 타이틀만 있는 한 줄로, 있는 카드(판매 급증)는 우측 끝에 붙는다. */}
       <div className="ins-card-hd">
         <h4>{title}</h4>
-      </div>
-
-      {/* 단위 필터 chip이 없는 카드(카테고리/지역/반품)도 이 슬롯을 항상 같은 높이로
-          차지해, 5개 카드의 본문(ranking list) 시작 위치가 전부 같은 선상에 오게 한다. */}
-      <div className="ins-card-header-extra" onClick={(e) => e.stopPropagation()}>
-        {headerExtra}
+        {headerExtra && (
+          <div className="ins-card-header-extra" onClick={(e) => e.stopPropagation()}>
+            {headerExtra}
+          </div>
+        )}
       </div>
 
       {/* title → content(flex:1) → footer 구조 — 내용 길이와 무관하게 상세보기 버튼이
