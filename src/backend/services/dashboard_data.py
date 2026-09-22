@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 DASHBOARD_DIR = Path(__file__).resolve().parents[3] / "data" / "dashboard"
+MASTER_DIR = Path(__file__).resolve().parents[3] / "data" / "master"
 DEFAULT_BASIS_WEEK = pd.Timestamp("2024-09-30")
 # 일간 운영 데이터(daily_demand/daily_transactions/inventory_daily)의 실제 관측 마지막 일자.
 # "실시간"이 아니라 보유 데이터 범위 내 값이며, 이 날짜를 넘는 조회일은 허용하지 않는다.
@@ -15,6 +16,38 @@ DEFAULT_DAILY_DATE = pd.Timestamp("2024-12-31")
 @lru_cache(maxsize=None)
 def load_product_master() -> pd.DataFrame:
     return pd.read_parquet(DASHBOARD_DIR / "product_master.parquet")
+
+
+@lru_cache(maxsize=None)
+def load_kan_category_order():
+    """카테고리 사이드바를 ㄱㄴㄷ이 아니라 대한상공회의소 KAN상품분류코드 순서(대분류→중분류→
+    소분류 각 2자리)로 정렬하기 위한 label→code 조회 테이블 3개를 반환한다.
+
+    참조 원본(data/master/*KAN상품분류코드.xlsx)의 KAN_CODE는 대분류(2)+중분류(2)+
+    소분류(2)+세분류(2) 8자리인데, 엑셀에 숫자로 저장돼 있어 대분류가 01~09일 때 앞자리
+    0이 사라진다(예: 1010101 == 원래 01010101). zfill(8)로 복원한 뒤 2자리씩 잘라 쓴다
+    (세분류 2자리는 이 앱이 안 쓰므로 버린다).
+
+    반환: (large_code, middle_code, small_code)
+      large_code:  {대분류: "01"}
+      middle_code: {(대분류, 중분류): "03"}   — 같은 중분류명이 다른 대분류에도 있을 수 있어 튜플 키
+      small_code:  {(대분류, 중분류, 소분류): "02"}
+    라벨은 원본 KAN_CODE표 기준으로 strip()해서 키를 만든다(product_master 쪽 라벨에 간간이
+    앞뒤 공백이 섞여 있어, 조회할 때도 동일하게 strip해서 맞춰야 한다 — 실제 그룹 표시는
+    건드리지 않는다).
+    """
+    ref = pd.read_excel(MASTER_DIR / "[대한상공회의소]KAN상품분류코드.xlsx")
+    code8 = ref["KAN_CODE"].astype(str).str.zfill(8)
+    large_lbl = ref["CLS_NM_1"].str.strip()
+    middle_lbl = ref["CLS_NM_2"].str.strip()
+    small_lbl = ref["CLS_NM_3"].str.strip()
+
+    large_code, middle_code, small_code = {}, {}, {}
+    for c, la, mi, sm in zip(code8, large_lbl, middle_lbl, small_lbl):
+        large_code.setdefault(la, c[0:2])
+        middle_code.setdefault((la, mi), c[2:4])
+        small_code.setdefault((la, mi, sm), c[4:6])
+    return large_code, middle_code, small_code
 
 
 @lru_cache(maxsize=None)

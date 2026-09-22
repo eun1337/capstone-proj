@@ -1,14 +1,20 @@
+// 공백 유무만 다른 표기(예: "가공 식품" vs "가공식품")도 같은 카테고리로 매칭되도록,
+// 검색어/대상 텍스트 모두 공백을 전부 제거하고 소문자화한 뒤 비교한다.
+function normalize(text) {
+  return (text || '').replace(/\s+/g, '').toLowerCase();
+}
+
 // 대시보드가 사용하는 KAN 표준분류 accordion 사이드바 — 항상 고정.
 // 대/중/소분류 label에 검색어가 포함된 노드 + 그 조상 경로만 남기고 나머지는 제거한다.
 // backend API 추가 없이 이미 받아온 /categories 응답을 프론트에서만 필터링한다.
 function filterCategoryTree(tree, query) {
-  const q = query.trim().toLowerCase();
+  const q = normalize(query);
   if (!q) return tree;
 
   function walk(nodes) {
     const out = [];
     for (const node of nodes) {
-      const selfMatch = node.label.toLowerCase().includes(q);
+      const selfMatch = normalize(node.label).includes(q);
       const filteredChildren = node.children ? walk(node.children) : undefined;
       if (selfMatch || (filteredChildren && filteredChildren.length > 0)) {
         out.push({ ...node, children: filteredChildren });

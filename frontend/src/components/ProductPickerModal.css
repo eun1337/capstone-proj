@@ -19,6 +19,8 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* user-select: none은 Dashboard.css의 .dash-root(페이지 최상위)에서 이미 전체에
+     상속시키고 있다 — 여기서 다시 걸 필요 없다(포털 없이 같은 트리 안에서 렌더링됨). */
 }
 
 .ppm-hd {

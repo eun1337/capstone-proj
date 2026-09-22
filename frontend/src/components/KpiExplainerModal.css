@@ -122,10 +122,18 @@
 
 .kpi-modal-list-hd {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 8px;
+  row-gap: 6px;
   margin-bottom: 6px;
+}
+
+.kpi-modal-list-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .kpi-modal-list-hd h4 {
@@ -211,6 +219,12 @@
   white-space: nowrap;
 }
 
+.kpi-modal-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
 .kpi-modal-table td.left {
   text-align: left;
   max-width: 240px;
@@ -235,3 +249,134 @@
 }
 
 .kpi-modal-table tr:hover td { background: #f8fafc; }
+
+/* ── 판매금액 전용: 일별 추이(콤보 차트 + 표) ──────────────────────────── */
+.kpi-modal-trend-section {
+  border-top: 1px solid #f1f5f9;
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.kpi-modal-trend-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.kpi-modal-trend-hd h4 {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.kpi-modal-list-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kpi-modal-sort-toggle {
+  display: flex;
+  gap: 4px;
+}
+
+.kpi-modal-sort-btn {
+  padding: 3px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  background: #fff;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.kpi-modal-sort-btn:hover { color: #475569; }
+.kpi-modal-sort-btn.active { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+
+.kpi-modal-csv-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s;
+}
+
+.kpi-modal-csv-btn:hover { background: #f8fafc; }
+
+.kpi-modal-trend-chart {
+  margin: 0 -4px;
+}
+
+/* 콤보 차트 호버 툴팁 — 다크 슬레이트 알약(MainForecastChart와 동일 톤) */
+.kpi-modal-trend-tooltip {
+  background: rgba(15, 23, 42, 0.92);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 10px 20px -5px rgba(15, 23, 42, 0.35);
+  font-size: 11.5px;
+}
+
+.kpi-modal-trend-tooltip-date {
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.kpi-modal-trend-tooltip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #e2e8f0;
+}
+
+.kpi-modal-trend-tooltip-row strong { color: #fff; margin-left: auto; }
+
+.kpi-modal-trend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: none;
+}
+.kpi-modal-trend-dot.solid { background: #3b82f6; }
+.kpi-modal-trend-dot.line { background: #f59e0b; }
+.kpi-modal-trend-dot.indigo { background: #6366f1; }
+.kpi-modal-trend-dot.pink { background: #ec4899; }
+
+/* 판매건수 표의 판매건수 셀 배경에 최댓값 대비 비율만큼 옅은 인디고 바를 깔아 크기를
+   직관적으로 보여준다 — 텍스트는 z-index로 그 위에 올린다. */
+.kpi-modal-gauge-cell {
+  position: relative;
+  text-align: right;
+}
+
+.kpi-modal-gauge-fill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  right: 0;
+  border-radius: 4px;
+  z-index: 0;
+}
+
+.kpi-modal-gauge-fill-indigo { background: #eef2ff; }
+
+.kpi-modal-gauge-text {
+  position: relative;
+  z-index: 1;
+  padding-right: 6px;
+}

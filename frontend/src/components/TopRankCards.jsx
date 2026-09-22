@@ -9,6 +9,15 @@ const fmtNum = (n) => Math.round(n).toLocaleString();
 const fmtNum1 = (n) => n.toFixed(1);
 const fmtPct = (v) => (v === null || v === undefined ? '-' : `${v.toFixed(1)}%`);
 
+// 예측 출고량/수요(EA 등 정수 단위 재고 이동량)는 소수점 표기가 부적절해 정수화하는데,
+// round가 아니라 ceil을 쓴다 — 2024년 h1 예측 대 실적 대조 결과, 이 카드에 실제로 뜨는
+// 수준의 예측값(1 이상, 상위권)은 총량 기준 약 -32%(round해도 -34%로 더 나빠짐, round는
+// 0.x대를 0으로 깎기 때문) 구조적으로 과소예측한다 — 즉 "반내림하면 위험한 쪽으로도
+// 반올림될" 여지가 이미 부족한 숫자를 더 깎는 셈이라 공급망 관점에서 부적절하다. ceil은
+// 그 방향으로는 절대 깎지 않고, 0 초과 1 미만 값도 자동으로 최소 1이 되어(결품 방지)
+// 별도 분기가 필요 없다.
+const fmtEaInt = (n) => Math.ceil(n).toLocaleString();
+
 // 대시보드 하단(우측 2개 + 아래 4개) TOP5 카드 6종 + 각 "전체보기" modal.
 // 상단에서 이미 단위(EA/BX/CS)가 확정돼 있으므로, 여기서는 행마다 단위 배지/단위 접미사를
 // 반복하지 않는다(단위 표시는 modal 표에서만 별도 컬럼으로). 비율(비중/충족률/증가율)은
@@ -99,15 +108,24 @@ function HorizontalBarChart({ items, unit = '', color = '#3b82f6', formatValue =
 // depth 0(전체) → 대분류별, 1(대분류 선택) → 중분류별, 2(대분류+중분류) → 소분류별,
 // 3(소분류까지 확정, 더 내려갈 하위 카테고리 없음) → 상품(SKU)별로 전환한다.
 // 백엔드(get_daily_category_sales)의 group_col 로직과 정확히 1:1로 대응된다.
-const CATEGORY_LEVEL_TITLES = ['대분류별 매출 상위', '중분류별 매출 상위', '소분류별 매출 상위'];
 const CATEGORY_LEVEL_LABELS = ['대분류', '중분류', '소분류'];
+
+// depth 0(전체 미선택)만 접두어 없이 "대분류별 매출 상위"이고, 그 아래부터는 방금 선택한
+// 상위 카테고리 이름을 "{이름} 내 ...으로 붙인다(예: '가공식품' 선택 → "가공식품 내
+// 중분류별 매출 상위") — selectedPath[depth-1]이 바로 그 "방금 선택한" 카테고리다.
+function categoryLevelTitle(depth, selectedPath) {
+  if (depth === 0) return '대분류별 매출 상위';
+  const parentName = selectedPath[depth - 1];
+  const childLevel = depth >= 3 ? '상품' : CATEGORY_LEVEL_LABELS[depth];
+  return `${parentName} 내 ${childLevel}별 매출 상위`;
+}
 
 export function categoryDrilldownInfo(selectedPath) {
   const depth = selectedPath?.length ?? 0;
   const isProductLevel = depth >= 3;
   return {
     isProductLevel,
-    title: isProductLevel ? '상품별 매출 상위' : CATEGORY_LEVEL_TITLES[depth],
+    title: categoryLevelTitle(depth, selectedPath),
     levelLabel: isProductLevel ? '상품' : CATEGORY_LEVEL_LABELS[depth],
   };
 }
@@ -292,7 +310,7 @@ export function AiTop5Card({ data, loading, error, onOpenDetail }) {
           <div key={p.sku_id} className="trc-row trc-row-ranked">
             <span className="trc-rank-badge trc-rank-badge-purple">{idx + 1}</span>
             <span className="trc-name" title={p.product_name}>{p.product_name}</span>
-            <span className="trc-val trc-val-mono">{fmtNum1(p.h1_pred)}</span>
+            <span className="trc-val trc-val-mono">{fmtEaInt(p.h1_pred)}</span>
           </div>
         ))}
       </div>
@@ -304,7 +322,7 @@ export function AiTop5Detail({ data }) {
   const chartItems = data.slice(0, 5).map((p) => ({ label: p.product_name, value: p.h1_pred ?? 0 }));
   return (
     <>
-      <HorizontalBarChart items={chartItems} color="#8b5cf6" formatValue={(v) => v.toFixed(1)} />
+      <HorizontalBarChart items={chartItems} color="#8b5cf6" formatValue={fmtEaInt} />
       <table className="trc-detail-table trc-detail-table-wide">
         <thead>
           <tr><th className="left">상품명</th><th className="left">바코드</th><th>단위</th><th>기준 판매수량</th><th>1주 예상수요</th><th>2주 예상수요</th><th>4주 예상수요</th></tr>
@@ -316,9 +334,9 @@ export function AiTop5Detail({ data }) {
               <td className="left">{p.barcode}</td>
               <td>{p.option_code}</td>
               <td className="num">{p.recent_sales_qty === null ? '-' : fmtNum(p.recent_sales_qty)}</td>
-              <td className="num">{p.h1_pred === null ? '-' : fmtNum1(p.h1_pred)}</td>
-              <td className="num">{p.h2_pred === null ? '-' : fmtNum1(p.h2_pred)}</td>
-              <td className="num">{p.h4_pred === null ? '-' : fmtNum1(p.h4_pred)}</td>
+              <td className="num">{p.h1_pred === null ? '-' : fmtEaInt(p.h1_pred)}</td>
+              <td className="num">{p.h2_pred === null ? '-' : fmtEaInt(p.h2_pred)}</td>
+              <td className="num">{p.h4_pred === null ? '-' : fmtEaInt(p.h4_pred)}</td>
             </tr>
           ))}
         </tbody>

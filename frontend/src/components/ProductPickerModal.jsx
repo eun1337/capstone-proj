@@ -13,6 +13,12 @@ const FORECAST_FILTERS = [
   { key: 'available', label: '예측 가능' },
   { key: 'unavailable', label: '예측 없음' },
 ];
+
+// 공백 유무만 다른 표기(예: "코카 콜라" vs "코카콜라")도 같은 상품으로 매칭되도록,
+// 검색어/대상 텍스트 모두 공백을 전부 제거하고 소문자화한 뒤 비교한다.
+function normalize(text) {
+  return (text || '').replace(/\s+/g, '').toLowerCase();
+}
 const SORT_OPTIONS = [
   { key: 'name', label: '이름순' },
   { key: 'recent_sales', label: '기준 판매수량 높은순' },
@@ -96,9 +102,9 @@ export default function ProductPickerModal({
   }, [rawProducts, forecastMap, activityMap]);
 
   const filteredSorted = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = normalize(search);
     let list = rows.filter((p) => {
-      if (q && !p.product_name.toLowerCase().includes(q) && !p.barcode.includes(q)) return false;
+      if (q && !normalize(p.product_name).includes(q) && !normalize(p.barcode).includes(q)) return false;
       if (unitFilter !== 'ALL' && p.option_code !== unitFilter) return false;
       if (forecastFilter === 'available' && !p.forecast_available_now) return false;
       if (forecastFilter === 'unavailable' && p.forecast_available_now) return false;

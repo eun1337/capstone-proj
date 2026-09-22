@@ -1,4 +1,5 @@
 from datetime import date
+from functools import lru_cache
 from typing import Dict, List, Optional
 
 import pandas as pd
@@ -18,6 +19,7 @@ from services.dashboard_data import (
     load_forecast_sku_keys,
     load_inventory_daily,
     load_inventory_weekly,
+    load_kan_category_order,
     load_product_master,
     load_sales_transactions_raw,
     load_weekly_demand,
@@ -27,7 +29,12 @@ from services.dashboard_data import (
 
 router = APIRouter()
 
-
+# 대시보드 메인 화면 진입/센터 전환 시 한 번에 몰리는 9개 endpoint에는 @lru_cache를 직접
+# 얹었다(아래 각 함수 위 표시). 쿼리 파라미터가 전부 str/int/None이라 그대로 캐시 키로 쓸 수
+# 있고, FastAPI는 lru_cache 래퍼의 __wrapped__를 따라가 원래 시그니처를 정확히 인식한다.
+# main.py의 lifespan이 기동 시 이 9개를 A/B센터·기본 조회일(2024-09-30/29)로 한 번씩 직접
+# 호출해 미리 채워 두므로, 발표 중 그 조합을 다시 누르면 pandas 재계산 없이 바로 반환된다.
+# (다른 날짜/카테고리 조합은 최초 1회는 정상적으로 느리고, 그 다음부터 그 조합만 빨라진다.)
 def _filter_by_center(df: pd.DataFrame, center: Optional[str]) -> pd.DataFrame:
     if center and center != "ALL":
         df = df[df["center_id"] == center]
@@ -41,17 +48,37 @@ class CategoryNode(BaseModel):
 
 
 @router.get("/categories", response_model=List[CategoryNode])
+@lru_cache(maxsize=256)
 def get_categories(center: Optional[str] = Query(None, description="A / B / ALL")):
     df = _filter_by_center(load_product_master(), center)
+    large_code, middle_code, small_code = load_kan_category_order()
+
+    # ㄱㄴㄷ(라벨 문자열) 순서 대신 대한상공회의소 KAN상품분류코드 순서(대/중/소분류 각
+    # 2자리)로 정렬한다. 참조표에 없는 라벨(드묾 — 예: '장류', '전기주전자')은 코드를 지어
+    # 내지 않고 그냥 라벨 알파벳순으로 맨 뒤에 둔다. product_master 쪽 라벨에 간간이 앞뒤
+    # 공백이 섞여 있어(예: ' 의료용품') 조회 키만 strip하고, 실제 표시/그룹핑 라벨은
+    # 그대로 둔다(기존 그룹 구성을 바꾸지 않기 위함).
+    def order_key(code_map, key, label):
+        code = code_map.get(key)
+        return (0, code) if code is not None else (1, label)
 
     tree: List[CategoryNode] = []
-    for large, g_large in df.groupby("KAN_대분류", sort=True):
+    large_groups = sorted(
+        df.groupby("KAN_대분류", sort=False),
+        key=lambda kv: order_key(large_code, kv[0].strip(), kv[0]),
+    )
+    for large, g_large in large_groups:
+        middle_groups = sorted(
+            g_large.groupby("KAN_중분류", sort=False),
+            key=lambda kv: order_key(middle_code, (large.strip(), kv[0].strip()), kv[0]),
+        )
         middles: List[CategoryNode] = []
-        for middle, g_middle in g_large.groupby("KAN_중분류", sort=True):
-            smalls = [
-                CategoryNode(label=small, sku_count=len(g_small))
-                for small, g_small in g_middle.groupby("KAN_소분류", sort=True)
-            ]
+        for middle, g_middle in middle_groups:
+            small_groups = sorted(
+                g_middle.groupby("KAN_소분류", sort=False),
+                key=lambda kv: order_key(small_code, (large.strip(), middle.strip(), kv[0].strip()), kv[0]),
+            )
+            smalls = [CategoryNode(label=small, sku_count=len(g_small)) for small, g_small in small_groups]
             middles.append(CategoryNode(label=middle, sku_count=len(g_middle), children=smalls))
         tree.append(CategoryNode(label=large, sku_count=len(g_large), children=middles))
     return tree
@@ -283,6 +310,7 @@ class DemandTrendResponse(BaseModel):
 
 
 @router.get("/demand-trend", response_model=DemandTrendResponse)
+@lru_cache(maxsize=256)
 def get_demand_trend(
     center:          str            = Query(..., description="A / B"),
     option_code:     str            = Query(..., description="EA / BX / CS — SKU 미선택 시 메인 차트 집계 단위"),
@@ -700,6 +728,7 @@ class ForecastProductItem(BaseModel):
 
 
 @router.get("/forecast-products", response_model=List[ForecastProductItem])
+@lru_cache(maxsize=256)
 def get_forecast_products(
     center:          str            = Query(..., description="A / B"),
     week_st:         Optional[str]  = Query(None, description="YYYY-MM-DD, 월요일 기준주"),
@@ -979,6 +1008,7 @@ class InventoryShortageResponse(BaseModel):
 
 
 @router.get("/insights/inventory-shortage", response_model=InventoryShortageResponse)
+@lru_cache(maxsize=256)
 def get_insights_inventory_shortage(
     center:          str            = Query(..., description="A / B"),
     week_st:         Optional[str]  = Query(None, description="YYYY-MM-DD, 월요일 기준주"),
@@ -1305,6 +1335,7 @@ class DailySummaryResponse(BaseModel):
 
 
 @router.get("/daily/summary", response_model=DailySummaryResponse)
+@lru_cache(maxsize=256)
 def get_daily_summary(
     center:          str            = Query("ALL", description="A / B / ALL"),
     date_:           Optional[str]  = Query(None, alias="date", description="YYYY-MM-DD, 조회일"),
@@ -1500,6 +1531,7 @@ class DailyCategorySalesResponse(BaseModel):
 
 
 @router.get("/daily/category-sales", response_model=DailyCategorySalesResponse)
+@lru_cache(maxsize=256)
 def get_daily_category_sales(
     center:          str            = Query(..., description="A / B"),
     date_:           Optional[str]  = Query(None, alias="date", description="YYYY-MM-DD, 조회일"),
@@ -1617,6 +1649,7 @@ class DailyRegionSalesResponse(BaseModel):
 
 
 @router.get("/daily/region-sales", response_model=DailyRegionSalesResponse)
+@lru_cache(maxsize=256)
 def get_daily_region_sales(
     center:          str            = Query(..., description="A / B"),
     date_:           Optional[str]  = Query(None, alias="date", description="YYYY-MM-DD, 조회일"),
@@ -1782,6 +1815,7 @@ class DailyReturnsResponse(BaseModel):
 
 
 @router.get("/daily/returns", response_model=DailyReturnsResponse)
+@lru_cache(maxsize=256)
 def get_daily_returns(
     center:          str            = Query(..., description="A / B"),
     date_:           Optional[str]  = Query(None, alias="date", description="YYYY-MM-DD, 조회일"),
@@ -1841,6 +1875,7 @@ class DailySalesIncreaseResponse(BaseModel):
 
 
 @router.get("/daily/sales-surge", response_model=DailySalesIncreaseResponse)
+@lru_cache(maxsize=256)
 def get_daily_sales_surge(
     center:          str            = Query(..., description="A / B"),
     date_:           Optional[str]  = Query(None, alias="date", description="YYYY-MM-DD, 조회일"),

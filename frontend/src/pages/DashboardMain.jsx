@@ -160,7 +160,7 @@ export default function DashboardMain({
           sparkValueFormat: fmtWon,
         },
         {
-          key: 'count', label: '판매기록 수', color: '#8b5cf6',
+          key: 'count', label: '판매건수', color: '#8b5cf6',
           value: fmtNum(summary.sales_record_count),
           changePct: countChange.pct,
           changeAbsText: countChange.abs === null ? null : `${signed(Math.round(countChange.abs))}건`,
@@ -316,7 +316,7 @@ export default function DashboardMain({
       {openKpi && summary && (
         <KpiExplainerModal
           kpiKey={openKpi} summary={summary}
-          center={center} operationalDate={operationalDate} categoryLabel={categoryLabel}
+          center={center} operationalDate={operationalDate} categoryLabel={categoryLabel} unit={effectiveUnit}
           categoryLarge={large} categoryMiddle={middle} categorySmall={small}
           onClose={() => setOpenKpi(null)}
         />

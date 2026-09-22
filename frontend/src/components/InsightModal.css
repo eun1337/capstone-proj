@@ -70,11 +70,21 @@
 
 .ins-modal-close:hover { background: #f1f5f9; color: #1e293b; }
 
+/* padding-top을 여기(스크롤 컨테이너)에 주면 안 된다 — sticky th는 top:0을 이 padding의
+   안쪽 경계(padding-box) 기준으로 고정하는데, 그 위 padding 영역 자체는 스크롤해도
+   그대로 남아있는 빈 공간이라 고정된 헤더 위로 지나간 행 텍스트가 그 틈으로 비쳐 보인다
+   (모든 상세보기 표 공통 버그였음). 대신 첫 번째 자식에 margin-top으로 같은 여백을 주면
+   그 여백은 일반 컨텐츠라 스크롤에 같이 밀려 올라가 사라지고, sticky 헤더는 padding 없는
+   컨테이너 맨 위(0)에 완전히 밀착해 아래 내용을 가린다. */
 .ins-modal-body {
-  padding: 16px 20px 20px;
+  padding: 0 20px 20px;
   overflow-y: auto;
   overflow-x: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.ins-modal-body > *:first-child {
+  margin-top: 16px;
 }

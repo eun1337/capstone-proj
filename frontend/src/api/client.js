@@ -1,15 +1,48 @@
 const BASE = '/api';
+// 백엔드가 캐시 미스로 무겁게 계산 중이어도(수 초~수십 초) 브라우저가 너무 일찍 연결을
+// 끊지 않도록 여유 있게 잡은 값 — 발표/데모 중 드물게 캐시 안 된 조합을 클릭해도
+// "Failed to fetch"로 보이지 않고 정상적으로 기다렸다가 응답을 받게 하기 위함이다.
+const REQUEST_TIMEOUT_MS = 25000;
+const RETRY_DELAY_MS = 1200;
 
-async function request(path, options = {}) {
+async function fetchWithTimeout(url, options, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// canRetry=false는 이미 한 번 재시도한 뒤의 재귀 호출에서만 쓰인다(무한 재시도 방지).
+async function request(path, options = {}, canRetry = true) {
   const token = localStorage.getItem('token');
-  const res = await fetch(`${BASE}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+  let res;
+  try {
+    res = await fetchWithTimeout(`${BASE}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    }, REQUEST_TIMEOUT_MS);
+  } catch (e) {
+    // fetch() 자체가 던지는 실패(연결 끊김 "Failed to fetch", 타임아웃 AbortError)만
+    // 네트워크 레벨 문제로 보고 조용히 1회 재시도한다 — 서버가 정상적으로 응답한
+    // 4xx/5xx는 이 catch에 들어오지 않으므로(아래 res.ok 분기에서 별도 처리) 재시도하지
+    // 않는다(재시도해도 같은 에러가 그대로 반복될 뿐이다).
+    if (canRetry) {
+      await sleep(RETRY_DELAY_MS);
+      return request(path, options, false);
+    }
+    throw new Error('일시적으로 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
+  }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: '서버 오류가 발생했습니다.' }));
     throw new Error(err.detail || '요청에 실패했습니다.');

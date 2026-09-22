@@ -182,20 +182,28 @@
   pointer-events: none;
 }
 
-/* 값 pill — 차트 바로 위에 뜨는 다크 슬레이트 알약, 숫자만 단독 표시. width는 지정하지
-   않고(w-auto) 내용만큼 자연스럽게 늘어나며, JS가 재는 실제 폭 기준으로만 위치를 보정한다
-   (translateX(calc(-50% + Npx))는 JSX 인라인 style에서 계산). */
+/* 값 pill — 차트 바로 위에 뜨는 다크 슬레이트 알약, 숫자만 단독 표시. width/height는 지정하지
+   않고(auto) 내용만큼 자연스럽게 늘어나며, JS가 재는 실제 폭 기준으로만 위치를 보정한다
+   (translateX(calc(-50% + Npx))는 JSX 인라인 style에서 계산).
+   부모 .kpi-spark-wrap이 line-height:0이라 그대로 두면 텍스트 상하단이 잘리므로,
+   inline-flex + line-height:normal로 라인박스 높이를 텍스트 기준으로 되돌린다
+   (날짜 배지는 부모(.kpi-spark-axis)가 line-height:0이 아니라 원래 안 잘렸음). */
 .kpi-spark-value-pill {
   position: absolute;
   bottom: 100%;
   margin-bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(30, 41, 59, 0.95); /* slate-800/95 */
   color: #fff;
   font-size: 12px;
-  font-weight: 600;
-  padding: 4px 12px;
+  font-weight: 700;
+  line-height: normal;
+  padding: 4px 10px;
   border-radius: 999px;
   width: max-content;
+  height: auto;
   white-space: nowrap;
   pointer-events: none;
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);

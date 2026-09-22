@@ -7,6 +7,21 @@
   height: 100vh;
   overflow: hidden;
   background: #f1f5f9;
+  /* 대시보드 화면 전체(헤더/사이드바/카드/차트 라벨/모달 표)를 대각선으로 드래그해도
+     텍스트가 파란 블록으로 선택되지 않게 한다 — user-select는 상속되므로 이 안에 중첩된
+     InsightModal/ProductPickerModal도 포털 없이 이 트리 안에서 렌더링되는 한 함께 적용된다.
+     검색창 등 input/textarea/contenteditable만 아래에서 다시 정상 선택 가능하게 되돌린다. */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+}
+
+.dash-root input,
+.dash-root textarea,
+.dash-root [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
 }
 
 /* ── Header ───────────────────────────────────────────── */

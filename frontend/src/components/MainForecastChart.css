@@ -5,6 +5,58 @@
   height: 100%;
 }
 
+.mfc-chart-area {
+  position: relative;
+  cursor: crosshair;
+}
+
+/* 다크 슬레이트 카드 툴팁 — bg-slate-900/90 backdrop-blur-sm rounded-lg shadow-xl
+   border-slate-700/60 스펙을 그대로 옮긴 것. pointer-events는 꺼서 마우스 이동 감지를
+   방해하지 않는다(감지 자체는 .mfc-chart-area의 mousemove가 담당). */
+.mfc-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 8px;
+  padding: 8px 12px;
+  box-shadow: 0 10px 20px -5px rgba(15, 23, 42, 0.35);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  z-index: 6;
+}
+
+.mfc-tooltip-week {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 3px;
+}
+
+.mfc-tooltip-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.mfc-tooltip-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.mfc-tooltip-dot.solid { background: #3b82f6; }
+.mfc-tooltip-dot.dashed {
+  width: 12px;
+  height: 0;
+  border-radius: 0;
+  border-top: 2px dashed #60a5fa;
+}
+
 .mfc-legend {
   display: flex;
   gap: 18px;
