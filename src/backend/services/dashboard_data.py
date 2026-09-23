@@ -1,5 +1,6 @@
 """data/dashboard/*.parquet 공용 로더 — 프로세스당 1회만 읽고 캐시한다."""
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 
@@ -7,6 +8,7 @@ import pandas as pd
 
 DASHBOARD_DIR = Path(__file__).resolve().parents[3] / "data" / "dashboard"
 MASTER_DIR = Path(__file__).resolve().parents[3] / "data" / "master"
+logger = logging.getLogger(__name__)
 DEFAULT_BASIS_WEEK = pd.Timestamp("2024-09-30")
 # 일간 운영 데이터(daily_demand/daily_transactions/inventory_daily)의 실제 관측 마지막 일자.
 # "실시간"이 아니라 보유 데이터 범위 내 값이며, 이 날짜를 넘는 조회일은 허용하지 않는다.
@@ -35,8 +37,16 @@ def load_kan_category_order():
     라벨은 원본 KAN_CODE표 기준으로 strip()해서 키를 만든다(product_master 쪽 라벨에 간간이
     앞뒤 공백이 섞여 있어, 조회할 때도 동일하게 strip해서 맞춰야 한다 — 실제 그룹 표시는
     건드리지 않는다).
+
+    data/는 git 추적 대상이 아니라 배포 서버에 이 xlsx가 없거나 openpyxl이 빠져 있을 수
+    있다. 정렬은 표시 편의일 뿐이므로 읽기 실패 시 빈 테이블을 돌려줘 라벨순 정렬로
+    대체한다(카테고리 사이드바 전체가 500으로 죽지 않게).
     """
-    ref = pd.read_excel(MASTER_DIR / "[대한상공회의소]KAN상품분류코드.xlsx")
+    try:
+        ref = pd.read_excel(MASTER_DIR / "[대한상공회의소]KAN상품분류코드.xlsx")
+    except Exception as e:
+        logger.warning("KAN상품분류코드 참조표 로드 실패 — 라벨순 정렬로 대체: %r", e)
+        return {}, {}, {}
     code8 = ref["KAN_CODE"].astype(str).str.zfill(8)
     large_lbl = ref["CLS_NM_1"].str.strip()
     middle_lbl = ref["CLS_NM_2"].str.strip()
