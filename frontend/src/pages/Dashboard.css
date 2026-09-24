@@ -614,13 +614,21 @@
 .filter-btn.active { background: #2563eb; border-color: #2563eb; color: #fff; font-weight: 600; }
 .filter-btn:not(.active):hover { border-color: #2563eb; color: #2563eb; }
 
-/* ── Tableau View ────────────────────────────────────── */
-.tableau-view { display: flex; flex-direction: column; gap: 14px; }
+/* ── Tableau View ────────────────────────────────────────── */
+.tableau-view {
+  display: flex;
+  flex-direction: column;
+  /* content-area가 flex column + gap:12px이므로 남은 공간을 전부 점유 */
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+}
 
 .tableau-view-hd {
   display: flex;
   align-items: center;
   gap: 14px;
+  flex-shrink: 0;
 }
 
 .back-btn {
@@ -632,65 +640,120 @@
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
+  flex-shrink: 0;
 }
 
 .back-btn:hover { border-color: #3b82f6; color: #3b82f6; }
 
 .tableau-view-hd h2 { font-size: 18px; font-weight: 700; color: #1e293b; }
 
-.tableau-badge {
-  font-size: 12px;
-  background: #eff6ff;
-  color: #2563eb;
+/* LIVE 뱃지 */
+.tableau-live-badge {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #16a34a;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
   padding: 3px 10px;
   border-radius: 20px;
-  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
-.tableau-ph {
+/* ── iframe 래퍼 — 남은 세로 공간을 100% 채운다 ── */
+.tableau-embed-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
   background: #fff;
   border-radius: 12px;
-  border: 2px dashed #e2e8f0;
-  min-height: 480px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+  overflow: hidden;
+}
+
+/* 실제 iframe */
+.tableau-iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+/* 로딩 중이거나 에러일 때 iframe을 숨긴다(DOM은 유지) */
+.tableau-iframe--hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* ── 로딩 오버레이 ── */
+.tableau-loading {
+  position: absolute;
+  inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 40px;
-}
-
-.tableau-ph-inner {
-  max-width: 560px;
-  width: 100%;
-  text-align: center;
-}
-
-.tableau-ph-icon { font-size: 52px; margin-bottom: 14px; }
-.tableau-ph-inner h3 { font-size: 19px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }
-.tableau-ph-inner p  { font-size: 13.5px; color: #64748b; margin-bottom: 24px; }
-
-.tableau-ph-rows {
+  gap: 16px;
   background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  overflow: hidden;
-  text-align: left;
+  color: #64748b;
+  font-size: 13.5px;
+  font-weight: 500;
+  z-index: 2;
 }
 
-.tableau-ph-row {
+@keyframes tableau-spin {
+  to { transform: rotate(360deg); }
+}
+
+.tableau-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: tableau-spin 0.8s linear infinite;
+}
+
+/* ── 에러 오버레이 ── */
+.tableau-error {
+  position: absolute;
+  inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid #e2e8f0;
-  font-size: 13px;
+  justify-content: center;
+  gap: 10px;
+  background: #fff;
+  padding: 32px;
+  text-align: center;
+  z-index: 2;
 }
 
-.tableau-ph-row:last-child { border-bottom: none; }
-.tableau-ph-row span { width: 90px; font-weight: 600; color: #64748b; flex-shrink: 0; }
-.tableau-ph-row code {
-  font-size: 12px;
-  color: #2563eb;
-  background: #eff6ff;
-  padding: 2px 8px;
-  border-radius: 4px;
+.tableau-error-icon { font-size: 42px; }
+
+.tableau-error p {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
 }
+
+.tableau-error-sub {
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  color: #94a3b8 !important;
+}
+
+.tableau-retry-btn {
+  margin-top: 8px;
+  padding: 8px 20px;
+  border: 1.5px solid #2563eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.tableau-retry-btn:hover { background: #eff6ff; }

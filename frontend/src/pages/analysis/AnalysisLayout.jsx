@@ -5,8 +5,8 @@ import './AnalysisLayout.css';
 
 const TOP_TABS = [
   { key: 'dashboard', label: '대시보드', to: '/dashboard' },
+  { key: 'model-analysis', label: '분석 과정', to: '/analysis/overview' },
   { key: 'tableau', label: 'Tableau', to: '/dashboard', state: { tab: 'tableau' } },
-  { key: 'model-analysis', label: '모델 분석', to: '/analysis/overview' },
 ];
 
 const NAV_ITEMS = [

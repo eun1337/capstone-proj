@@ -70,10 +70,6 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="login-hint">
-          <span>테스트 계정</span>
-          <code>adminid / adminpw</code>
-        </div>
       </div>
     </div>
   );

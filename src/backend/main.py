@@ -1,4 +1,17 @@
+import os
+from pathlib import Path
+
+# src/backend/.env 파일의 환경변수를 자동으로 로드한다.
+# python-dotenv가 없으면 OS 환경변수만 사용하므로 동작에는 문제없다.
+try:
+    from dotenv import load_dotenv
+    _env_path = Path(__file__).parent / ".env"
+    load_dotenv(dotenv_path=_env_path, override=True)
+except ImportError:
+    pass  # python-dotenv 미설치 시 OS 환경변수만 사용
+
 from fastapi import FastAPI
+
 from fastapi.middleware.cors import CORSMiddleware
 from routers import auth, tableau, logistics, dashboard, model_analysis
 

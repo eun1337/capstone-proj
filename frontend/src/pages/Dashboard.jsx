@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import CategorySidebar from '../components/CategorySidebar.jsx';
@@ -11,10 +11,11 @@ const OPERATIONAL_DATE_MIN = '2024-01-01';
 const OPERATIONAL_DATE_MAX = '2024-12-31';
 const UNITS = ['EA', 'BX', 'CS'];
 
+// to가 있는 탭은 별도 라우트(/analysis/*)로 이동하고, 없는 탭은 이 페이지 안에서 전환한다.
 const TABS = [
   { key: 'dashboard', label: '대시보드' },
+  { key: 'model-analysis', label: '분석 과정', to: '/analysis/overview' },
   { key: 'tableau', label: 'Tableau' },
-  { key: 'model-analysis', label: '모델 분석', to: '/analysis/overview' },
 ];
 
 function fmtISODate(d) {
@@ -48,11 +49,8 @@ export default function Dashboard() {
   const [center, setCenter] = useState('A');
   const [operationalDate, setOperationalDate] = useState(DEFAULT_OPERATIONAL_DATE);
   const [topUnit, setTopUnit] = useState('EA');
-  const [activeTab, setActiveTab] = useState(
-  location.state?.tab === 'tableau' ? 'tableau' : 'dashboard'
-);
-
-const [historyWeeks, setHistoryWeeks] = useState(4);
+  const [activeTab, setActiveTab] = useState(location.state?.tab === 'tableau' ? 'tableau' : 'dashboard');
+  const [historyWeeks, setHistoryWeeks] = useState(4);
 
   const [categoryTree, setCategoryTree] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -363,7 +361,7 @@ const [historyWeeks, setHistoryWeeks] = useState(4);
     setCenter('A');
     setOperationalDate(DEFAULT_OPERATIONAL_DATE);
     setTopUnit('EA');
-    setHistoryWeeks(12);
+    setHistoryWeeks(4);
     setSelectedPath([]);
     setOpenMap({});
     setCategorySearch('');
@@ -427,13 +425,16 @@ const [historyWeeks, setHistoryWeeks] = useState(4);
       </header>
 
       <div className="main-body">
-        <CategorySidebar
-          categoryTree={categoryTree} categoriesLoading={categoriesLoading} categoriesError={categoriesError}
-          selectedPath={selectedPath} onSelectCategory={handleSelectCategory}
-          openMap={openMap} onToggleCategory={handleToggleCategory}
-          categorySearch={categorySearch} onCategorySearchChange={setCategorySearch}
-          selectedSku={selectedSku} onOpenProductPicker={() => setShowProductPicker(true)} onClearSku={handleClearSku}
-        />
+        {/* Tableau 탭에서는 사이드바를 숨겨 iframe이 전체 너비를 점유한다 */}
+        {activeTab !== 'tableau' && (
+          <CategorySidebar
+            categoryTree={categoryTree} categoriesLoading={categoriesLoading} categoriesError={categoriesError}
+            selectedPath={selectedPath} onSelectCategory={handleSelectCategory}
+            openMap={openMap} onToggleCategory={handleToggleCategory}
+            categorySearch={categorySearch} onCategorySearchChange={setCategorySearch}
+            selectedSku={selectedSku} onOpenProductPicker={() => setShowProductPicker(true)} onClearSku={handleClearSku}
+          />
+        )}
 
         <div className="content-area">
           {activeTab === 'dashboard' && (
@@ -475,29 +476,146 @@ const [historyWeeks, setHistoryWeeks] = useState(4);
   );
 }
 
+// ── Tableau Connected Apps SSO 임베딩 ─────────────────────────────────────────
+//
+// 문제: React가 JSX로 <tableau-viz>를 렌더링할 때 Tableau Embedding API 스크립트가
+//       아직 커스텀 엘리먼트를 등록하기 전일 수 있음 → 빈 화면만 표시됨.
+// 해결: customElements.whenDefined('tableau-viz')로 등록 완료를 기다린 뒤
+//       document.createElement로 명령형 마운트.
+
+// 임베딩할 뷰 주소는 frontend/.env 의 VITE_TABLEAU_VIZ_URL 로 주입한다 (.env.example 참고).
+const TABLEAU_VIZ_URL = import.meta.env.VITE_TABLEAU_VIZ_URL;
+
 function TableauView({ onBack }) {
-  const src = 'https://public.tableau.com/views/YOUR_WORKBOOK/DemandForecast';
+  const [token, setToken]       = useState(null);
+  const [status, setStatus]     = useState('loading'); // 'loading' | 'ready' | 'error'
+  const [errorMsg, setErrorMsg] = useState('');
+  const containerRef = useRef(null); // <tableau-viz>가 마운트될 div
+  const vizRef       = useRef(null); // <tableau-viz> DOM 엘리먼트 참조 (토큰 갱신용)
+
+  // ── 토큰 fetch (최초 + 자동 갱신 공용) ────────────────────────────────────
+  const fetchToken = useCallback(async () => {
+    try {
+      const data = await api.getTableauToken();
+      setToken(data.token);
+      setStatus('ready');
+      return data.expires_in;
+    } catch (e) {
+      setErrorMsg(e.message || '토큰 발급에 실패했습니다.');
+      setStatus('error');
+      return null;
+    }
+  }, []);
+
+  // ── 마운트 시 토큰 fetch + 자동 갱신 타이머 ───────────────────────────────
+  useEffect(() => {
+    let timerId = null;
+    async function init() {
+      const expiresIn = await fetchToken();
+      if (!expiresIn) return;
+      const refreshMs = Math.max((expiresIn - 60) * 1000, 10_000);
+      timerId = setInterval(async () => {
+        const data = await api.getTableauToken().catch(() => null);
+        if (data && vizRef.current) {
+          // Tableau Embedding API가 제공하는 token setter로 조용히 갱신
+          vizRef.current.token = data.token;
+        }
+      }, refreshMs);
+    }
+    init();
+    return () => { if (timerId) clearInterval(timerId); };
+  }, [fetchToken]);
+
+  // ── 토큰 준비 완료 → <tableau-viz> 명령형 마운트 ─────────────────────────
+  useEffect(() => {
+    if (status !== 'ready' || !token || !containerRef.current) return;
+
+    let cancelled = false;
+
+    (async () => {
+      if (!TABLEAU_VIZ_URL) {
+        setErrorMsg('VITE_TABLEAU_VIZ_URL 환경변수가 설정되지 않았습니다.');
+        setStatus('error');
+        return;
+      }
+
+      // Embedding API 스크립트 로드 완료 대기 (최대 15초)
+      try {
+        const defined = customElements.whenDefined('tableau-viz');
+        const timeout = new Promise((_, rej) =>
+          setTimeout(() => rej(new Error('Tableau API 스크립트 로드 타임아웃(15s)')), 15_000)
+        );
+        await Promise.race([defined, timeout]);
+      } catch (e) {
+        if (!cancelled) {
+          setErrorMsg(e.message);
+          setStatus('error');
+        }
+        return;
+      }
+
+      if (cancelled || !containerRef.current) return;
+
+      containerRef.current.innerHTML = '';
+
+      const viz = document.createElement('tableau-viz');
+      viz.setAttribute('src', TABLEAU_VIZ_URL);
+      viz.setAttribute('token', token);
+      viz.setAttribute('toolbar', 'top');
+      viz.setAttribute('device', 'desktop');
+      // 시트 탭을 보이게 하려면 아래 줄을 삭제하세요
+      viz.setAttribute('hide-tabs', '');
+      viz.style.cssText = 'width:100%;height:100%;display:block;';
+
+      containerRef.current.appendChild(viz);
+      vizRef.current = viz;
+    })();
+
+    return () => {
+      cancelled = true;
+      if (containerRef.current) containerRef.current.innerHTML = '';
+      vizRef.current = null;
+    };
+  }, [status, token]);
+
+
+  // ── 재시도 ────────────────────────────────────────────────────────────────
+  function handleRetry() {
+    setStatus('loading');
+    setErrorMsg('');
+    setToken(null);
+    fetchToken();
+  }
+
   return (
     <div className="tableau-view">
       <div className="tableau-view-hd">
         <button className="back-btn" onClick={onBack}>← 대시보드로</button>
-        <h2>Tableau 상세 분석</h2>
-        <span className="tableau-badge">JWT: GET /api/tableau-token</span>
+        <h2>Tableau 메인 대시보드</h2>
+        {status === 'ready' && (
+          <span className="tableau-live-badge">● SSO 연결됨</span>
+        )}
       </div>
-      <div className="tableau-ph">
-        <div className="tableau-ph-inner">
-          <div className="tableau-ph-icon">📊</div>
-          <h3>Tableau 대시보드 연동 영역</h3>
-          <p>Tableau Connected App 설정 완료 후 실제 뷰가 이 영역에 표시됩니다.</p>
-          <div className="tableau-ph-rows">
-            <div className="tableau-ph-row">
-              <span>JWT 발급</span><code>GET /api/tableau-token</code>
-            </div>
-            <div className="tableau-ph-row">
-              <span>Tableau URL</span><code>{src}</code>
-            </div>
+
+      <div className="tableau-embed-wrap">
+        {status === 'loading' && (
+          <div className="tableau-loading">
+            <div className="tableau-spinner" />
+            <span>SSO 인증 중입니다…</span>
           </div>
-        </div>
+        )}
+        {status === 'error' && (
+          <div className="tableau-error">
+            <div className="tableau-error-icon">⚠️</div>
+            <p>대시보드를 불러올 수 없습니다.</p>
+            <p className="tableau-error-sub">{errorMsg}</p>
+            <button className="tableau-retry-btn" onClick={handleRetry}>
+              다시 시도
+            </button>
+          </div>
+        )}
+        {/* <tableau-viz>는 위 useEffect에서 명령형으로 이 div 안에 마운트됨 */}
+        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
       </div>
     </div>
   );
