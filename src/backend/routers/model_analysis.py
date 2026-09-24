@@ -4,6 +4,14 @@ import pandas as pd
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
+from services.stat_common_key_data import (
+    MODEL_LABELS as STAT_COMMON_MODEL_LABELS,
+    MODEL_ORDER as STAT_COMMON_MODEL_ORDER,
+    all_family_row as stat_all_family_row,
+    coverage_row as stat_coverage_row,
+    is_extreme as stat_is_extreme,
+    is_extreme_all_family as stat_is_extreme_all_family,
+)
 from services.model_comparison_data import (
     EXTREME_MODELS,
     HORIZONS,
@@ -19,7 +27,10 @@ from services.ml_dl_selection_data import (
     MODEL_ORDER as MLDL_MODEL_ORDER,
     load_parameter_summary,
     load_trials,
+    representative_row,
 )
+from services.ml_dl_raw_metrics import get_mae_rmse
+from services.ml_dl_experiments_data import load_experiment_entries, load_narrative_notes
 from services.model_final_compare_data import (
     ML_LABEL as FINAL_ML_LABEL,
     ML_MODEL as FINAL_ML_MODEL,
@@ -39,10 +50,18 @@ from services.qa_detail_data import (
     STAT_KEY_TO_MODEL_VARIANT as QA_STAT_KEY_TO_MODEL_VARIANT,
     STAT_MODEL as QA_STAT_MODEL,
     STAT_VARIANT as QA_STAT_VARIANT,
+    TS_MODELS as QA_TS_MODELS,
+    TS_MODEL_LABELS as QA_TS_MODEL_LABELS,
+    compute_sku_summary as qa_compute_sku_summary,
+    get_product_info as qa_get_product_info,
     load_coverage_summary as qa_load_coverage_summary,
+    load_sku_product_lookup as qa_load_sku_product_lookup,
     load_stat_model_comparison as qa_load_stat_model_comparison,
     load_weekly_error as qa_load_weekly_error,
     query_sku_predictions as qa_query_sku_predictions,
+    query_sku_predictions_multi as qa_query_sku_predictions_multi,
+    representative_skus as qa_representative_skus,
+    search_products as qa_search_products,
     weighted_weekly_combine as qa_weighted_weekly_combine,
 )
 
@@ -213,6 +232,117 @@ def get_stat_center_compare(model: str = Query("SARIMA")):
     return CenterCompareResponse(
         model=model, label=MODEL_LABELS[model], horizons=[HORIZON_LABELS[h] for h in HORIZONS], series=series,
     )
+
+StatCommonMetric = Literal["WAPE", "Bias", "MAE", "RMSE"]
+
+
+class CommonHeatmapRow(BaseModel):
+    model: str
+    label: str
+    is_extreme: bool
+    values: Dict[str, float]
+    n_rows: Dict[str, int]
+
+class CommonHeatmapResponse(BaseModel):
+    metric: StatCommonMetric
+    center: Center
+    horizons: List[str]
+    n_sku: Optional[int] = None
+    rows: List[CommonHeatmapRow]
+
+@router.get("/stat/common-heatmap", response_model=CommonHeatmapResponse)
+def get_stat_common_heatmap(center: Center = Query("ALL"), metric: StatCommonMetric = Query("WAPE")):
+    """카드2 Heatmap — 7개 모델이 전부 동시에 존재하는 단일 공통 panel(all-family common
+    panel)에서 계산한 값만 사용한다(모델마다 다른 population 아님)."""
+    metric_key = {"WAPE": "wape", "Bias": "bias", "MAE": "mae", "RMSE": "rmse"}[metric]
+    rows: List[CommonHeatmapRow] = []
+    n_sku = None
+    for model in STAT_COMMON_MODEL_ORDER:
+        values, nrows = {}, {}
+        for h in HORIZONS:
+            r = stat_all_family_row(model, center, h)
+            if r is None:
+                continue
+            hk = HORIZON_LABELS[h]
+            values[hk] = r[metric_key]
+            nrows[hk] = r["n_rows"]
+            n_sku = r["n_sku"]
+        rows.append(CommonHeatmapRow(
+            model=model, label=STAT_COMMON_MODEL_LABELS[model], is_extreme=stat_is_extreme_all_family(model),
+            values=values, n_rows=nrows,
+        ))
+    return CommonHeatmapResponse(metric=metric, center=center, horizons=[HORIZON_LABELS[h] for h in HORIZONS], n_sku=n_sku, rows=rows)
+
+
+class CommonBiasPoint(BaseModel):
+    model: str
+    label: str
+    wape: float
+    bias: float
+    n_rows: int
+    n_sku: int
+
+class CommonBiasMapResponse(BaseModel):
+    center: Center
+    horizon: str
+    points: List[CommonBiasPoint]
+
+@router.get("/stat/common-wape-bias", response_model=CommonBiasMapResponse)
+def get_stat_common_wape_bias(center: Center = Query("ALL"), horizon: HorizonKey = Query("h1")):
+    """카드5 WAPE×Bias — 카드2와 정확히 동일한 all-family common panel 값만 사용한다.
+    통계 트랙에는 Bias ±20% guardrail이나 P13 개념이 존재하지 않으므로(ML/DL 전용) 그런
+    기준선은 표시하지 않는다."""
+    points: List[CommonBiasPoint] = []
+    for model in STAT_COMMON_MODEL_ORDER:
+        if stat_is_extreme_all_family(model):
+            continue
+        r = stat_all_family_row(model, center, HORIZON_VALUES[horizon])
+        if r is None:
+            continue
+        points.append(CommonBiasPoint(
+            model=model, label=STAT_COMMON_MODEL_LABELS[model], wape=r["wape"], bias=r["bias"],
+            n_rows=r["n_rows"], n_sku=r["n_sku"],
+        ))
+    return CommonBiasMapResponse(center=center, horizon=horizon, points=points)
+
+
+class CoverageEntry(BaseModel):
+    model: str
+    label: str
+    n_total: int
+    n_normal: int
+    n_fallback_constant: int
+    n_fallback_naive_mean: int
+    n_fallback_coldstart: int
+    normal_rate: float
+    fallback_rate: float
+    n_has_observed_history_false: int
+    n_override_instability: Optional[int] = None
+    is_extreme: bool
+
+class CoverageResponse(BaseModel):
+    entries: List[CoverageEntry]
+
+@router.get("/stat/coverage", response_model=CoverageResponse)
+def get_stat_coverage():
+    """카드4 — 단순 초대형 WAPE 값이 아니라 모델별 정상/실패/fallback/cold-start/override
+    건수를 함께 보여준다(own 전체 population 기준, pair로 좁히지 않음)."""
+    entries: List[CoverageEntry] = []
+    for model in STAT_COMMON_MODEL_ORDER:
+        r = stat_coverage_row(model)
+        if r is None:
+            continue
+        entries.append(CoverageEntry(
+            model=model, label=STAT_COMMON_MODEL_LABELS[model],
+            n_total=int(r["n_total"]), n_normal=int(r["n_normal"]),
+            n_fallback_constant=int(r["n_fallback_constant"]), n_fallback_naive_mean=int(r["n_fallback_naive_mean"]),
+            n_fallback_coldstart=int(r["n_fallback_coldstart"]), normal_rate=float(r["normal_rate"]),
+            fallback_rate=float(r["fallback_rate"]), n_has_observed_history_false=int(r["n_has_observed_history_false"]),
+            n_override_instability=int(r["n_override_instability"]) if r.get("n_override_instability") is not None else None,
+            is_extreme=stat_is_extreme(model),
+        ))
+    return CoverageResponse(entries=entries)
+
 
 MlDlModelFilter = Literal["ALL", "RF", "LGBM", "LSTM", "TFT", "Informer", "H-RF", "H-LGBM"]
 MlDlModel = Literal["RF", "LGBM", "LSTM", "TFT", "Informer", "H-RF", "H-LGBM"]
@@ -431,6 +561,91 @@ def get_mldl_model_detail(model: MlDlModel = Query("H-LGBM"), horizon: HorizonKe
             trial_info = TrialInfo(horizon=horizon, trial=int(r["trial"]), wape=float(r["pooled_wape"]), bias=float(r["pooled_bias"]), bias_pass=bool(r["bias_pass"]), is_selected=False)
 
     return ModelDetailResponse(model=csv_model, label=model, track=str(rows.iloc[0]["track"]), summary=summary, trial=trial_info)
+
+MLDL_MODEL_TRACK: Dict[str, str] = {
+    "RF": "ml", "LightGBM": "ml",
+    "LSTM": "dl", "TFT": "dl", "Informer": "dl",
+    "Hurdle-RF": "hurdle", "Hurdle-LightGBM": "hurdle",
+}
+
+class ModelSummaryEntry(BaseModel):
+    model:       str
+    label:       str
+    track:       Literal["ml", "dl", "hurdle"]
+    horizon:     HorizonKey
+    trial:       int
+    wape:        float
+    bias:        float
+    mae:         Optional[float]
+    rmse:        Optional[float]
+    mae_status:  Literal["ok", "unavailable"]
+    rmse_status: Literal["ok", "unavailable"]
+    bias_pass:   bool
+    status:      Literal["selected", "reference_only"]
+
+class ModelSummaryResponse(BaseModel):
+    bias_band: float
+    entries:   List[ModelSummaryEntry]
+
+@router.get("/mldl/model-summary", response_model=ModelSummaryResponse)
+def get_mldl_model_summary():
+    """7개 모델 × h1/h2/h4의 2023 P13 대표 행. status='selected'는 실제 bias guardrail
+    통과 selected trial, status='reference_only'는 통과 trial이 없어 참고용으로만 쓰는
+    최저 Pooled WAPE trial이다(둘을 절대 같은 의미로 표시하지 않는다)."""
+    df = load_trials()
+    entries: List[ModelSummaryEntry] = []
+    for m in MLDL_MODEL_ORDER:
+        for h in HORIZONS:
+            rows = df[(df["model"] == m) & (df["horizon"] == h)]
+            if rows.empty:
+                continue
+            row, status = representative_row(df, m, h)
+            trial_id = int(row["trial"])
+            wape, bias = float(row["pooled_wape"]), float(row["pooled_bias"])
+            mae, rmse, mae_status = get_mae_rmse(m, h, trial_id, wape)
+            entries.append(ModelSummaryEntry(
+                model=m, label=MLDL_MODEL_LABELS[m], track=MLDL_MODEL_TRACK[m],
+                horizon=HORIZON_LABELS[h], trial=trial_id, wape=wape, bias=bias,
+                mae=mae, rmse=rmse, mae_status=mae_status, rmse_status=mae_status,
+                bias_pass=bool(row["bias_pass"]), status=status,
+            ))
+    return ModelSummaryResponse(bias_band=MLDL_BIAS_BAND, entries=entries)
+
+class ExperimentVariant(BaseModel):
+    key:     str
+    label:   str
+    wape:    float
+    bias:    float
+    adopted: bool
+
+class ExperimentEntry(BaseModel):
+    id:         str
+    title:      str
+    hypothesis: str
+    changed:    str
+    eval_note:  str
+    variants:   List[ExperimentVariant]
+    conclusion: str
+    source_paths: List[str]
+
+class NarrativeNote(BaseModel):
+    id:   str
+    title: str
+    body: str
+    source_paths: List[str]
+
+class ExperimentsResponse(BaseModel):
+    entries: List[ExperimentEntry]
+    narrative_notes: List[NarrativeNote]
+
+@router.get("/mldl/improvement-experiments", response_model=ExperimentsResponse)
+def get_mldl_improvement_experiments():
+    """Hurdle 구조 도입 전후에 실제로 수행된 진단 실험(outputs/hpo, outputs/diagnostics 원본 JSON
+    직접 로드). 동일 평가조건인 실험끼리만 entries(수치 비교), 조건이 다른 실험은 narrative_notes(서술)."""
+    return ExperimentsResponse(
+        entries=[ExperimentEntry(**e) for e in load_experiment_entries()],
+        narrative_notes=[NarrativeNote(**n) for n in load_narrative_notes()],
+    )
 
 FinalCenter = Literal["ALL", "A", "B"]
 FinalHorizon = Literal["ALL", "h1", "h2", "h4"]
@@ -693,7 +908,168 @@ def get_final_demand_detail(
         interpretation=interpretation,
     )
 
-QaSkuCenter = Literal["A", "B"]  
+QaSkuCenter = Literal["A", "B"]
+
+class QaProductSearchItem(BaseModel):
+    sku_id:            str
+    center:            str
+    product_name:      Optional[str] = None
+    barcode:           Optional[str] = None
+    option_code:       Optional[str] = None
+    centers_available: List[str]
+
+class QaProductSearchResponse(BaseModel):
+    query: str
+    items: List[QaProductSearchItem]
+
+@router.get("/qa/products/search", response_model=QaProductSearchResponse)
+def get_qa_products_search(q: str = Query(..., min_length=1), limit: int = Query(8, ge=1, le=30)):
+    df = qa_search_products(q, limit)
+    items = [
+        QaProductSearchItem(
+            sku_id=r.sku_id, center=r.center_id,
+            product_name=r.상품명 if pd.notna(r.상품명) else None,
+            barcode=str(r.barcode) if pd.notna(r.barcode) else None,
+            option_code=r.option_code if pd.notna(r.option_code) else None,
+            centers_available=r.centers_available,
+        )
+        for r in df.itertuples()
+    ]
+    return QaProductSearchResponse(query=q, items=items)
+
+class QaProductInfoResponse(BaseModel):
+    sku_id:            str
+    center:            str
+    product_name:      Optional[str]
+    barcode:           Optional[str]
+    option_code:       Optional[str]
+    category_large:    Optional[str]
+    category_middle:   Optional[str]
+    category_small:    Optional[str]
+    centers_available: List[str]
+
+@router.get("/qa/product-info", response_model=QaProductInfoResponse)
+def get_qa_product_info(sku_id: str = Query(...), center: QaSkuCenter = Query(...)):
+    info = qa_get_product_info(sku_id, center)
+    if not info:
+        raise HTTPException(status_code=404, detail="해당 SKU/센터 조합의 상품 정보를 찾을 수 없습니다.")
+    return QaProductInfoResponse(**info)
+
+QaWeeksWindow = Literal["12", "24", "52", "all"]
+
+class QaTsWeekPoint(BaseModel):
+    target_date: str
+    actual:      float
+    predictions: Dict[str, Optional[float]]
+
+class QaTsModelSummary(BaseModel):
+    model:              str
+    label:              str
+    is_default:         bool
+    n_weeks_used:       int
+    wape:               Optional[float]
+    bias:               Optional[float]
+    mae:                Optional[float]
+    rmse:               Optional[float]
+    actual_total:       float
+    prediction_total:   float
+    fallback_ratio:     float
+    cold_start_ratio:   float
+    model_fit_ratio:    float
+    development_n_obs:  Optional[float]
+    model_applied_rows:  int
+    comparison_scope_counts: Dict[str, int]
+    forecast_source_counts: Dict[str, int]
+
+class QaTsSummary(BaseModel):
+    weeks_available:    int
+    weeks_used:         int
+    actual_consistent:  bool
+    inconsistent_dates: List[str]
+    avg_actual:         Optional[float]
+    zero_demand_ratio:  Optional[float]
+    zero_demand_count:  Optional[int]
+    actual_total:       Optional[float]
+    winner_model:       Optional[str]
+    models:             List[QaTsModelSummary]
+    diagnostics:        Dict[str, object]
+
+class QaSkuTimeseriesResponse(BaseModel):
+    sku_id:          str
+    center:          QaSkuCenter
+    horizon:         HorizonKey
+    weeks_window:    QaWeeksWindow
+    available_models: List[str]
+    weeks:           List[QaTsWeekPoint]
+    summary:         QaTsSummary
+    evaluation_design: str
+    evaluation_start: Optional[str]
+    evaluation_end: Optional[str]
+
+@router.get("/qa/sku-timeseries", response_model=QaSkuTimeseriesResponse)
+def get_qa_sku_timeseries(
+    sku_id:  str        = Query(...),
+    center:  QaSkuCenter = Query(...),
+    horizon: HorizonKey  = Query("h1"),
+    weeks:   QaWeeksWindow = Query("24"),
+):
+    models = [(m, v) for m, v, _label, _default in QA_TS_MODELS]
+    df = qa_query_sku_predictions_multi(sku_id, center, HORIZON_VALUES[horizon], models)
+    if df.empty:
+        raise HTTPException(status_code=404, detail="해당 SKU/센터/예측시점에 저장된 SKU-level 예측 데이터를 찾을 수 없습니다.")
+
+    summary = qa_compute_sku_summary(df, weeks)
+    window_dates = summary["window_dates"]
+    available_models = sorted({m["model"] for m in summary["models"]})
+
+    week_points: List[QaTsWeekPoint] = []
+    if window_dates:
+        actual_by_date = df.drop_duplicates(subset="target_date").set_index("target_date")["actual"]
+        pred_lookup = {
+            (r.model, r.target_date): r.prediction
+            for r in df.itertuples() if r.target_date in set(window_dates)
+        }
+        for d in window_dates:
+            preds = {m: pred_lookup.get((m, d)) for m in available_models}
+            week_points.append(QaTsWeekPoint(
+                target_date=pd.Timestamp(d).strftime("%Y-%m-%d"),
+                actual=float(actual_by_date.loc[d]),
+                predictions={k: (float(v) if v is not None else None) for k, v in preds.items()},
+            ))
+
+    summary_out = QaTsSummary(
+        weeks_available=summary["weeks_available"], weeks_used=summary["weeks_used"],
+        actual_consistent=summary["actual_consistent"], inconsistent_dates=summary["inconsistent_dates"],
+        avg_actual=summary["avg_actual"], zero_demand_ratio=summary["zero_demand_ratio"],
+        zero_demand_count=summary["zero_demand_count"], actual_total=summary["actual_total"],
+        winner_model=summary["winner_model"],
+        models=[QaTsModelSummary(**m) for m in summary["models"]],
+        diagnostics=summary["diagnostics"],
+    )
+    return QaSkuTimeseriesResponse(
+        sku_id=sku_id, center=center, horizon=horizon, weeks_window=weeks,
+        available_models=available_models, weeks=week_points, summary=summary_out,
+        evaluation_design="2024 Holdout",
+        evaluation_start=week_points[0].target_date if week_points else None,
+        evaluation_end=week_points[-1].target_date if week_points else None,
+    )
+
+class QaRepresentativeCase(BaseModel):
+    key: str
+    sku_id: str
+    center: str
+    actual_sum: float
+    n_rows: int
+    stat_wape: float
+    ml_wape: float
+    stat_bias: float
+    ml_bias: float
+    zero_ratio: float
+    fallback_rows: int
+
+@router.get("/qa/representative-cases", response_model=List[QaRepresentativeCase])
+def get_qa_representative_cases(horizon: HorizonKey = Query("h1")):
+    return [QaRepresentativeCase(**row) for row in qa_representative_skus(HORIZON_VALUES[horizon])]
 
 @router.get("/qa/weeks")
 def get_qa_weeks():
@@ -703,6 +1079,8 @@ def get_qa_weeks():
 class QaSkuPoint(BaseModel):
     sku_id:         str
     center:         str
+    product_name:   Optional[str] = None
+    option_code:    Optional[str] = None
     actual_sum:     float
     stat_wape:      float
     ml_wape:        float
@@ -724,15 +1102,23 @@ def get_qa_sku_scatter(
     sku_search: Optional[str] = Query(None),
 ):
     df = final_filter_sku_compare(center, horizon)
+    df = df.merge(qa_load_sku_product_lookup(), on=["center", "sku_id"], how="left")
     if sku_search:
-        df = df[df["sku_id"].str.contains(sku_search, case=False, na=False, regex=False)]
+        mask = (
+            df["sku_id"].str.contains(sku_search, case=False, na=False, regex=False)
+            | df["상품명"].str.contains(sku_search, case=False, na=False, regex=False)
+        )
+        df = df[mask]
     if df.empty:
         return QaSkuScatterResponse(center=center, horizon=horizon, total=0, points=[])
 
     df = df.assign(demand_quartile=final_assign_quartile(df["actual_sum"]))
     points = [
         QaSkuPoint(
-            sku_id=r.sku_id, center=r.center, actual_sum=float(r.actual_sum),
+            sku_id=r.sku_id, center=r.center,
+            product_name=r.상품명 if pd.notna(r.상품명) else None,
+            option_code=r.option_code if pd.notna(r.option_code) else None,
+            actual_sum=float(r.actual_sum),
             stat_wape=float(r.stat_WAPE), ml_wape=float(r.ml_WAPE), diff=float(r.stat_WAPE - r.ml_WAPE),
             winner=r.winner, quartile=str(r.demand_quartile),
             quartile_label=FINAL_QUARTILE_LABELS.get(str(r.demand_quartile), str(r.demand_quartile)),
@@ -745,6 +1131,8 @@ class QaSkuDetailResponse(BaseModel):
     sku_id:         str
     center:         str
     horizon:        HorizonKey
+    product_name:   Optional[str] = None
+    option_code:    Optional[str] = None
     actual_sum:     float
     stat_wape:      float
     ml_wape:        float
@@ -762,8 +1150,14 @@ def get_qa_sku_detail(sku_id: str = Query(...), center: QaSkuCenter = Query(...)
         raise HTTPException(status_code=404, detail="해당 조건에서 유효한 SKU 데이터를 찾을 수 없습니다.")
     row = hit.iloc[0]
     q = str(final_assign_quartile(pd.Series([row["actual_sum"]])).iloc[0])
+    lookup = qa_load_sku_product_lookup()
+    match = lookup[(lookup["center"] == center) & (lookup["sku_id"] == sku_id)]
+    product_name = str(match["상품명"].iloc[0]) if not match.empty else None
+    option_code = str(match["option_code"].iloc[0]) if not match.empty else None
     return QaSkuDetailResponse(
-        sku_id=sku_id, center=center, horizon=horizon, actual_sum=float(row["actual_sum"]),
+        sku_id=sku_id, center=center, horizon=horizon,
+        product_name=product_name, option_code=option_code,
+        actual_sum=float(row["actual_sum"]),
         stat_wape=float(row["stat_WAPE"]), ml_wape=float(row["ml_WAPE"]),
         stat_mae=float(row["stat_MAE"]), ml_mae=float(row["ml_MAE"]), winner=row["winner"],
         quartile=q, quartile_label=FINAL_QUARTILE_LABELS.get(q, q),
@@ -970,8 +1364,9 @@ class QaParamModel(BaseModel):
 class QaParameterSummaryResponse(BaseModel):
     models: List[QaParamModel]
 
-QA_PARAM_MODELS = ["SARIMA", "Hurdle-LightGBM"]
-QA_PARAM_LABELS = {"SARIMA": "SARIMA", "Hurdle-LightGBM": "H-LGBM"}
+QA_PARAM_MODELS = ["ARIMA", "SARIMA", "ARIMAX", "SARIMAX", "RF", "LightGBM", "LSTM", "TFT", "Informer", "Hurdle-RF", "Hurdle-LightGBM"]
+QA_PARAM_LABELS = {"ARIMA": "ARIMA", "SARIMA": "SARIMA", "ARIMAX": "ARIMAX", "SARIMAX": "SARIMAX", "RF": "RF", "LightGBM": "LGBM", "LSTM": "LSTM", "TFT": "TFT", "Informer": "Informer", "Hurdle-RF": "H-RF", "Hurdle-LightGBM": "H-LGBM"}
+QA_PARAM_DETAIL_KEY = {"ARIMA": "ARIMA_S0", "ARIMAX": "ARIMAX_S4", "SARIMAX": "SARIMAX_S4", "SARIMA": "SARIMA"}
 
 @router.get("/qa/parameter-summary", response_model=QaParameterSummaryResponse)
 def get_qa_parameter_summary(models: Optional[str] = Query(None)):
@@ -987,7 +1382,8 @@ def get_qa_parameter_summary(models: Optional[str] = Query(None)):
         if rows.empty:
             continue
         out.append(QaParamModel(
-            model=m, label=QA_PARAM_LABELS.get(m, m), track=str(rows.iloc[0]["track"]), detail=MODEL_DETAILS.get(m),
+            model=m, label=QA_PARAM_LABELS.get(m, m), track=str(rows.iloc[0]["track"]),
+            detail=MODEL_DETAILS.get(QA_PARAM_DETAIL_KEY.get(m, m)),
             rows=[
                 QaParamRow(
                     parameter_type=r["parameter_type"], parameter=r["parameter"],

@@ -1,16 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import CategorySidebar from '../components/CategorySidebar.jsx';
 import ProductPickerModal from '../components/ProductPickerModal.jsx';
 import DashboardMain from './DashboardMain.jsx';
 import './Dashboard.css';
 
-// 대시보드 운영정보(KPI/차트/카테고리·지역/판매증가/반품)는 operationalDate 기준 일간이고,
-// AI TOP5/재고부족/수요예측 추이의 예측 부분은 operationalDate 시점에 이미 존재했던 가장
-// 최근 forecast 원점(주간, aiBasisWeek)을 쓴다 — 두 시간축을 하나로 합치지 않는다.
 const DEFAULT_OPERATIONAL_DATE = '2024-09-30';
-// 보유 데이터 범위(실제 관측된 마지막 일자는 2024-12-31) — "실시간"이 아니라 이 범위까지만 조회 가능.
 const OPERATIONAL_DATE_MIN = '2024-01-01';
 const OPERATIONAL_DATE_MAX = '2024-12-31';
 const UNITS = ['EA', 'BX', 'CS'];
@@ -18,6 +14,7 @@ const UNITS = ['EA', 'BX', 'CS'];
 const TABS = [
   { key: 'dashboard', label: '대시보드' },
   { key: 'tableau', label: 'Tableau' },
+  { key: 'model-analysis', label: '모델 분석', to: '/analysis/overview' },
 ];
 
 function fmtISODate(d) {
@@ -33,10 +30,6 @@ function shiftDate(iso, days) {
   return fmtISODate(d);
 }
 
-// 일간 조회일(operationalDate) 이하 가장 최근 월요일 — weekly /inventory 조회 전용.
-// forecast_basis_week(=forecast_2024 원본이 실제로 존재하는 주)와는 다른 개념이다: 이건 순수
-// 달력 계산이고, weekly_demand/inventory_weekly는 모든 월요일에 대해 dense grid이므로
-// forecast 유무와 무관하게 항상 유효한 기준주를 준다.
 function mostRecentMonday(iso) {
   const d = new Date(`${iso}T00:00:00`);
   const diff = (d.getDay() + 6) % 7;
@@ -51,16 +44,15 @@ function formatDateLabel(iso) {
 }
 
 export default function Dashboard() {
+  const location = useLocation();
   const [center, setCenter] = useState('A');
   const [operationalDate, setOperationalDate] = useState(DEFAULT_OPERATIONAL_DATE);
-  // 수량 기반 카드(수요예측 추이/AI TOP5/재고부족/판매증가/반품수량) 공통 단위. EA/BX/CS만
-  // 있고 "전체"는 없다 — 서로 다른 barcode의 별도 SKU라 합산/환산하지 않는다.
   const [topUnit, setTopUnit] = useState('EA');
-  const [activeTab, setActiveTab] = useState('dashboard');
-  // 수요예측 추이 차트 조회 기간(주) — HistoryRangeControl의 7일/30일/90일 프리셋
-  // (각각 1/4/13주) 또는 직접 선택한 시작일로 갱신된다. 기본값은 "30일" 프리셋과 일치시켜
-  // 첫 진입 화면에서부터 버튼 하나가 active로 보이게 한다.
-  const [historyWeeks, setHistoryWeeks] = useState(4);
+  const [activeTab, setActiveTab] = useState(
+  location.state?.tab === 'tableau' ? 'tableau' : 'dashboard'
+);
+
+const [historyWeeks, setHistoryWeeks] = useState(4);
 
   const [categoryTree, setCategoryTree] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -69,12 +61,11 @@ export default function Dashboard() {
   const [selectedPath, setSelectedPath] = useState([]);
   const [categorySearch, setCategorySearch] = useState('');
 
-  const [selectedSku, setSelectedSku] = useState(null); // 상품 찾기 modal에서 선택 완료한 SKU
+  const [selectedSku, setSelectedSku] = useState(null);
   const [showProductPicker, setShowProductPicker] = useState(false);
 
   const [large, middle, small] = selectedPath;
   const categoryLabel = selectedPath.length > 0 ? selectedPath.join(' > ') : null;
-  // 상품이 선택되면 상단 단위는 그 SKU의 실제 option_code로 고정된다.
   const effectiveUnit = selectedSku ? selectedSku.option_code : topUnit;
   const prevDate = shiftDate(operationalDate, -1);
   const prevWeekDate = shiftDate(operationalDate, -7);
@@ -82,7 +73,6 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const username = localStorage.getItem('username') || 'admin';
 
-  // ── 카테고리 트리 ──────────────────────────────────────────────
   useEffect(() => {
     let ignore = false;
     setCategoriesLoading(true);
@@ -94,7 +84,6 @@ export default function Dashboard() {
     return () => { ignore = true; };
   }, [center]);
 
-  // ── KPI 요약(오늘/전일) ────────────────────────────────────────
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryError, setSummaryError] = useState(null);
@@ -121,7 +110,6 @@ export default function Dashboard() {
   const aiBasisWeek = summary?.forecast_basis_week ?? null;
   const inventoryBasisWeek = mostRecentMonday(operationalDate);
 
-  // ── 집계 모드(SKU 미선택) 전용 데이터 ──────────────────────────
   const [categorySales, setCategorySales] = useState(null);
   const [categorySalesLoading, setCategorySalesLoading] = useState(true);
   const [categorySalesError, setCategorySalesError] = useState(null);
@@ -229,8 +217,6 @@ export default function Dashboard() {
     return () => { ignore = true; };
   }, [center, large, middle, small, operationalDate, topUnit, selectedSku]);
 
-  // 오늘 반품수량 TOP5 — 기존 /daily/returns(금액 정렬) 전체 ranking을 그대로 받아 상단
-  // 단위(topUnit)로 필터링하고 반품수량 내림차순으로만 클라이언트에서 재정렬한다(새 backend 없음).
   useEffect(() => {
     if (selectedSku) return;
     let ignore = false;
@@ -269,7 +255,6 @@ export default function Dashboard() {
     return () => { ignore = true; };
   }, [center, large, middle, small, aiBasisWeek, topUnit, selectedSku, historyWeeks]);
 
-  // ── SKU 선택 모드 전용 데이터 ──────────────────────────────────
   const [forecast, setForecast] = useState(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState(null);
@@ -335,7 +320,6 @@ export default function Dashboard() {
     return () => { ignore = true; };
   }, [selectedSku, operationalDate]);
 
-  // ── 핸들러 ─────────────────────────────────────────────────────
   function handleCenterChange(next) {
     if (next === center) return;
     setCenter(next);
@@ -374,8 +358,6 @@ export default function Dashboard() {
     navigate('/');
   }
 
-  // IN-SIGHT 로고 클릭 — 센터/기준일/단위/카테고리·상품 선택/탭 등 모든 화면 상태를
-  // 최초 진입 시 기본값으로 되돌린다("홈으로" 개념). 로그인 세션은 건드리지 않는다.
   function handleLogoClick() {
     setActiveTab('dashboard');
     setCenter('A');
@@ -401,7 +383,7 @@ export default function Dashboard() {
             <button
               key={t.key}
               className={`nav-item ${activeTab === t.key ? 'active' : ''}`}
-              onClick={() => setActiveTab(t.key)}
+              onClick={() => (t.to ? navigate(t.to) : setActiveTab(t.key))}
             >
               {t.label}
             </button>
@@ -493,7 +475,6 @@ export default function Dashboard() {
   );
 }
 
-// ── Tableau 연동 영역 (기존 로직 보존, 절대 수정하지 않음) ────────────────────
 function TableauView({ onBack }) {
   const src = 'https://public.tableau.com/views/YOUR_WORKBOOK/DemandForecast';
   return (
@@ -503,20 +484,6 @@ function TableauView({ onBack }) {
         <h2>Tableau 상세 분석</h2>
         <span className="tableau-badge">JWT: GET /api/tableau-token</span>
       </div>
-      {/*
-        실제 연동 시:
-        1. frontend/index.html Tableau Embedding API 스크립트 주석 해제
-        2. GET /api/tableau-token 으로 JWT 발급 후 token 속성에 전달
-        3. src 를 실제 워크북 URL 로 교체
-
-        <tableau-viz
-          src={src}
-          token="{jwt}"
-          device="desktop"
-          hide-tabs
-          toolbar="hidden"
-        />
-      */}
       <div className="tableau-ph">
         <div className="tableau-ph-inner">
           <div className="tableau-ph-icon">📊</div>

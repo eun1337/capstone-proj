@@ -2,6 +2,8 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api/client.js';
 import EChart from '../../components/charts/EChart.jsx';
+import ModelDetailModal from '../../components/ModelDetailModal.jsx';
+import { STAT_MODEL_DETAIL } from './statModelDetailConfig.js';
 import './analysis.css';
 import './StatModelAnalysis.css';
 
@@ -21,6 +23,9 @@ const BIAS_HORIZONS = [
   { value: 'h2', label: '2주 후' },
   { value: 'h4', label: '4주 후' },
 ];
+const CENTER_COMPARE_ORDER = ['A', 'B', 'ALL'];
+const BIAS_SAFE_BAND = 20;
+const EXCLUDED_MODELS = ['ARIMAX_S1', 'ARIMAX_S4'];
 
 const PALETTE = ['#2563eb', '#10b981', '#8b5cf6', '#f59e0b', '#0ea5e9', '#ef4444', '#64748b'];
 
@@ -39,14 +44,14 @@ function inputColumns(model, meta) {
 }
 
 function fmtMetric(v) {
-  if (v === null || v === undefined) return '-';
+  if (!Number.isFinite(v)) return '-';
   const av = Math.abs(v);
   if (av >= 1000) return v.toExponential(2).replace('e+', 'e');
-  return v.toFixed(1);
+  return v.toFixed(2);
 }
 
 function fmtTooltip(v) {
-  if (v === null || v === undefined) return '-';
+  if (!Number.isFinite(v)) return '-';
   const av = Math.abs(v);
   if (av >= 1000) return v.toExponential(2).replace('e+', 'e');
   return v.toFixed(2);
@@ -54,7 +59,7 @@ function fmtTooltip(v) {
 
 function fmtAxisLabel(v) {
   if (Math.abs(v) >= 1000) return v.toExponential(1).replace('e+', 'e');
-  return String(v);
+  return Number.isFinite(v) ? v.toFixed(1).replace(/\.0$/, '') : '-';
 }
 
 function axisTooltipFormatter(params) {
@@ -70,41 +75,19 @@ const ARIMA_PARAM = {
   criterion: 'AICc(정보기준) 최소 후보 선택',
   nonConvergence: 'AICc 최소 후보가 수렴하지 않으면, 같은 탐색에서 나온 후보 중 수렴한 후보만 모아 그중 AICc 최소 구조로 대체',
 };
-const SEASONAL_PARAM = {
-  range: '계절주기 m ∈ {13, 26, 52} (판매 이력이 104주 미만이면 m=52 제외), 계절 (P,Q) 각 0~1, 계절 차분 D는 OCSB 검정으로 결정 — 비계절 (p,d,q)는 ARIMA 탐색 결과를 그대로 상속',
-  method: 'm 후보별로 (P,Q) 조합을 적합해 AICc 비교',
-  criterion: 'AICc 최소 계절 구조 선택',
-  nonConvergence: '최적 후보가 수렴하지 않으면 수렴한 후보 중 AICc 최소 구조로 대체',
-};
-const EXOG_ONLY_PARAM = {
-  range: '(p,d,q)는 ARIMA 탐색 결과를 그대로 사용, 외생변수만 추가로 적합',
-  method: '동일 (p,d,q) 구조에 exog 블록을 추가해 재적합 (별도 구조 탐색 없음)',
-  criterion: 'ARIMA_S0에서 이미 선정된 구조를 상속',
-  nonConvergence: 'ARIMA_S0과 동일한 수렴 판정 기준 적용',
-};
 
 const MODEL_META = {
   ARIMA_S0: {
     label: 'ARIMA', oneLiner: '외생변수·계절성 없이 판매 이력만으로 학습하는 기준 모델',
     seasonal: false, exog: false,
     columns: [QTY_COLUMN],
-    structureEasy: 'ARIMA (계절성·외생변수 없음)',
     usedInfo: '판매이력만 사용 (계절패턴·외생변수 없음)',
-    why: '외생변수·계절성이 전혀 없는 가장 단순한 baseline. 계절성/외생변수를 추가했을 때의 개선 효과를 비교하기 위한 기준점으로 실험',
-    paramSearch: ARIMA_PARAM,
-    paramShort: '과거 패턴 후보 탐색 → 수렴한 후보 중 정보기준이 가장 좋은 구조 선택',
-    verdict: { selected: false, reason: '외생변수·계절성이 없는 baseline. SARIMA 대비 정확도가 낮아 대표모델로 미선정' },
   },
   SARIMA: {
     label: 'SARIMA', oneLiner: '반복되는 계절 패턴(명절 등)을 반영한 통계 대표모델',
     seasonal: true, exog: false,
     columns: [QTY_COLUMN],
-    structureEasy: 'ARIMA + 계절 구조',
     usedInfo: '판매이력 + 계절패턴 (외생변수 없음)',
-    why: '판매 데이터에 존재하는 주기적 계절 패턴(명절 등 반복 수요)을 반영했을 때 baseline 대비 얼마나 개선되는지 확인하기 위해 실험',
-    paramSearch: SEASONAL_PARAM,
-    paramShort: '계절주기 후보(13/26/52주) 탐색 → 정상 수렴 확인 → AICc 최소 구조 선택',
-    verdict: { selected: true, reason: '외생변수 없이 계절성만 반영해도 h1~h4 전 구간에서 WAPE가 안정적 → 통계 대표모델로 선정' },
   },
   ARIMAX_S1: {
     label: 'ARIMAX-S1', oneLiner: '경제지표(소비자심리·물가)를 추가한 ARIMA 실험 모델',
@@ -115,12 +98,7 @@ const MODEL_META = {
       { col: 'cpi_y1_prev', meaning: '소비자물가지수(CPI), 전년 기준값', purpose: '물가 수준 변화가 판매에 미치는 영향 반영' },
       { col: 'cpi_y2_prev_yoy', meaning: '소비자물가지수(CPI) 전전년 대비 YoY 변화율', purpose: '물가 변화율 추세를 반영' },
     ],
-    structureEasy: 'ARIMA + 경제지표',
     usedInfo: '판매이력 + 경제지표 외생변수',
-    why: '소비자심리지수·물가지수 같은 경제지표가 판매량 예측에 도움이 되는지 확인하기 위해 실험',
-    paramSearch: EXOG_ONLY_PARAM,
-    paramShort: 'ARIMA 구조 유지 → 경제지표를 추가해 학습',
-    verdict: { selected: false, reason: '일부 SKU에서 계수가 발산해 WAPE가 극단적으로 커지는 경우가 많아 미선정' },
   },
   ARIMAX_S2: {
     label: 'ARIMAX-S2', oneLiner: 'COVID 시기 수요 변화를 추가한 ARIMA 실험 모델',
@@ -129,12 +107,7 @@ const MODEL_META = {
       QTY_COLUMN,
       { col: 'covid_flag', meaning: '코로나19 관련 기간 여부 플래그', purpose: '코로나 시기의 이례적 수요 변화를 반영' },
     ],
-    structureEasy: 'ARIMA + COVID 지표',
     usedInfo: '판매이력 + COVID 외생변수',
-    why: '코로나19 시기의 수요 변화를 외생변수로 반영했을 때 예측이 개선되는지 확인하기 위해 실험',
-    paramSearch: EXOG_ONLY_PARAM,
-    paramShort: 'ARIMA 구조 유지 → COVID 지표를 추가해 학습',
-    verdict: { selected: false, reason: 'ARIMA baseline 대비 큰 개선이 없어 미선정' },
   },
   ARIMAX_S3: {
     label: 'ARIMAX-S3', oneLiner: '공휴일(설·추석) 전후 판매 변화를 추가한 ARIMA 실험 모델',
@@ -145,12 +118,7 @@ const MODEL_META = {
       { col: '공휴일_W-1', meaning: '해당 주의 1주 전이 공휴일 주', purpose: '명절 다음 주의 판매 변화 반영' },
       { col: '공휴일_W+1', meaning: '해당 주의 1주 후가 공휴일 주', purpose: '명절 이전 주의 판매 변화 반영' },
     ],
-    structureEasy: 'ARIMA + 공휴일 지표',
     usedInfo: '판매이력 + 공휴일 외생변수',
-    why: '설·추석 등 공휴일 전후의 판매 변화를 외생변수로 반영했을 때 예측이 개선되는지 확인하기 위해 실험',
-    paramSearch: EXOG_ONLY_PARAM,
-    paramShort: 'ARIMA 구조 유지 → 공휴일 지표를 추가해 학습',
-    verdict: { selected: false, reason: 'ARIMA baseline 대비 큰 개선이 없어 미선정' },
   },
   ARIMAX_S4: {
     label: 'ARIMAX-S4', oneLiner: '경제·COVID·공휴일 외생변수를 모두 결합한 ARIMA 실험 모델',
@@ -165,12 +133,7 @@ const MODEL_META = {
       { col: '공휴일_W-1', meaning: '해당 주의 1주 전이 공휴일 주', purpose: '명절 다음 주의 판매 변화 반영' },
       { col: '공휴일_W+1', meaning: '해당 주의 1주 후가 공휴일 주', purpose: '명절 이전 주의 판매 변화 반영' },
     ],
-    structureEasy: 'ARIMA + 경제·COVID·공휴일 지표 전체',
     usedInfo: '판매이력 + 경제·COVID·공휴일 외생변수 전체(7종)',
-    why: '경제·COVID·공휴일 외생변수를 모두 결합했을 때의 효과를 확인하기 위해 실험',
-    paramSearch: EXOG_ONLY_PARAM,
-    paramShort: 'ARIMA 구조 유지 → 외부 지표를 함께 학습',
-    verdict: { selected: false, reason: '외생변수가 많아 계수 발산 빈도가 가장 높아 미선정' },
   },
   SARIMAX_S4: {
     label: 'SARIMAX', oneLiner: '계절 구조와 모든 외생변수를 함께 결합한 실험 모델',
@@ -185,14 +148,18 @@ const MODEL_META = {
       { col: '공휴일_W-1', meaning: '해당 주의 1주 전이 공휴일 주', purpose: '명절 다음 주의 판매 변화 반영' },
       { col: '공휴일_W+1', meaning: '해당 주의 1주 후가 공휴일 주', purpose: '명절 이전 주의 판매 변화 반영' },
     ],
-    structureEasy: 'ARIMA + 계절 구조 + 경제·COVID·공휴일 지표 전체',
     usedInfo: '판매이력 + 계절패턴 + 경제·COVID·공휴일 외생변수 전체(7종)',
-    why: '계절성과 모든 외생변수를 함께 결합했을 때 SARIMA보다 더 나은지 확인하기 위해 실험',
-    paramSearch: { range: 'SARIMA에서 결정한 (p,d,q), (P,D,Q,m)과 추세를 상속', method: '확정 구조에 경제3·COVID1·공휴일3 외생변수를 함께 넣어 계수 재추정', criterion: 'SARIMA의 AICc 최소 계절 구조 상속 (별도 구조 탐색 없음)', nonConvergence: '적합 결과의 수렴 상태를 별도로 확인' },
-    paramShort: 'SARIMA 구조 유지 → 외부 지표를 함께 학습',
-    verdict: { selected: false, reason: '계절성 + 외생변수를 결합했지만 SARIMA 대비 WAPE가 더 높고 변동폭이 커서 미선정' },
   },
 };
+
+const DIVERGENCE_CAUSES = [
+  { n: 1, title: '짧은 SKU별 Development', detail: '11주 / 14주 사례: 경제변수 계수를 안정적으로 추정하기에 짧은 이력' },
+  { n: 2, title: '경제변수 간 강한 상관', detail: 'CCSI–CPI2 상관계수 −0.990 사례: 변수 간 높은 상관으로 계수 추정이 불안정' },
+  { n: 3, title: '미래 경제변수의 학습범위 이탈', detail: 'CPI z-score 15.71 / 20.81 사례: 2024 경제변수가 Development 범위를 벗어남' },
+  { n: 4, title: '불안정한 선형 외삽', detail: 'β × future exog가 log-scale 예측의 극단값을 생성' },
+  { n: 5, title: '일부 AR/MA state 동학의 추가 증폭 가능', detail: '외생변수 외삽과 함께 일부 구조의 상태 동학이 극단 예측을 추가 증폭한 것으로 판단' },
+  { n: 6, title: 'expm1 복원', detail: '작은 log-scale 차이가 원 수량으로 복원될 때 기하급수적으로 확대' },
+];
 
 export default function StatModelAnalysis() {
   const [center, setCenter] = useState('ALL');
@@ -200,39 +167,23 @@ export default function StatModelAnalysis() {
   const [selectedModel, setSelectedModel] = useState('SARIMA');
   const [detailOpen, setDetailOpen] = useState(false);
 
-  const [heatmap, setHeatmap] = useState(null);
-  const [profile, setProfile] = useState(null);
   const [centerCompare, setCenterCompare] = useState(null);
-
-  const [heatmapError, setHeatmapError] = useState(null);
-  const [profileError, setProfileError] = useState(null);
   const [compareError, setCompareError] = useState(null);
 
+  const [holdoutPerf, setHoldoutPerf] = useState(null);
   useEffect(() => {
     let ignore = false;
-    setHeatmapError(null);
-    setHeatmap(null);
-    api.getStatHeatmap({ center, metric })
-      .then((d) => { if (!ignore) setHeatmap(d); })
-      .catch((e) => { if (!ignore) { setHeatmapError(e.message); setHeatmap(null); } });
+    Promise.all(BIAS_HORIZONS.map(async ({ value }) => [value, await api.getQaStatVariableEffect({ center: 'ALL', horizon: value })]))
+      .then((results) => { if (!ignore) setHoldoutPerf(Object.fromEntries(results)); })
+      .catch(() => { if (!ignore) setHoldoutPerf(null); });
     return () => { ignore = true; };
-  }, [center, metric]);
-
-  useEffect(() => {
-    let ignore = false;
-    setProfileError(null);
-    setProfile(null);
-    api.getStatHorizonProfile({ center, metric, include_extreme: false })
-      .then((d) => { if (!ignore) setProfile(d); })
-      .catch((e) => { if (!ignore) { setProfileError(e.message); setProfile(null); } });
-    return () => { ignore = true; };
-  }, [center, metric]);
+  }, []);
 
   useEffect(() => {
     let ignore = false;
     setCompareError(null);
     setCenterCompare(null);
-    Promise.all(CENTERS.map(async ({ value }) => {
+    Promise.all(CENTER_COMPARE_ORDER.map(async (value) => {
       const response = await api.getStatHeatmap({ center: value, metric });
       const row = response.rows.find((r) => r.model === selectedModel);
       return { center: value, isExtreme: row?.is_extreme === true, horizons: response.horizons, values: response.horizons.map((h) => row?.values[h] ?? null) };
@@ -243,42 +194,25 @@ export default function StatModelAnalysis() {
   }, [selectedModel, metric]);
 
   return (
-    <>
+    <div className="sm-page">
       <div className="az-page-hd">
         <div>
           <h2>02 통계모델 분석</h2>
           <p>통계모델 중 어떤 구조가 가장 적합했는가</p>
         </div>
-        <div className="az-filter-bar">
-          <div className="az-filter-group">
-            <span className="az-filter-label">Center</span>
-            <select className="az-filter-select" value={center} onChange={(e) => setCenter(e.target.value)}>
-              {CENTERS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-          <div className="az-filter-group">
-            <span className="az-filter-label">Metric</span>
-            <select className="az-filter-select" value={metric} onChange={(e) => setMetric(e.target.value)}>
-              {METRICS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-            </select>
-          </div>
-        </div>
       </div>
 
-      <div className="az-grid az-grid-1-2-1 sm-row-2-1">
+      <div className="sm-dashboard-grid">
         <FamilyTreeCard selectedModel={selectedModel} onSelectModel={setSelectedModel} />
-        <HeatmapCard data={heatmap} error={heatmapError} selectedModel={selectedModel} onSelectModel={setSelectedModel} />
-        <DetailCard selectedModel={selectedModel} onOpenDetail={() => setDetailOpen(true)} />
-      </div>
-
-      <div className="az-grid az-grid-3 sm-row-3">
-        <ProfileCard data={profile} error={profileError} selectedModel={selectedModel} onSelectModel={setSelectedModel} />
-        <BiasMapCard center={center} selectedModel={selectedModel} onSelectModel={setSelectedModel} />
+        <HeatmapCard center={center} onCenterChange={setCenter} pageMetric={metric} onMetricChange={setMetric} selectedModel={selectedModel} onSelectModel={setSelectedModel} />
+        <DetailCard selectedModel={selectedModel} holdoutPerf={holdoutPerf} onOpenDetail={() => setDetailOpen(true)} />
+        <DivergenceCausesCard center={center} onCenterChange={setCenter} />
+        <BiasMapCard center={center} onCenterChange={setCenter} selectedModel={selectedModel} onSelectModel={setSelectedModel} />
         <CenterCompareCard data={centerCompare} error={compareError} metric={metric} selectedModel={selectedModel} />
       </div>
 
-      {detailOpen && <DetailModal model={selectedModel} onClose={() => setDetailOpen(false)} />}
-    </>
+      {detailOpen && <DetailModal model={selectedModel} holdoutPerf={holdoutPerf} onClose={() => setDetailOpen(false)} />}
+    </div>
   );
 }
 
@@ -301,10 +235,6 @@ const FAMILY_EDGES = [
   { source: 'ARIMAX_HUB', target: 'ARIMAX_S4', busY: 76 },
   { source: 'SARIMA', target: 'SARIMAX_S4' },
 ];
-
-const MODEL_COLOR = Object.fromEntries(
-  FAMILY_NODES.filter((n) => n.model).map((n, i) => [n.model, PALETTE[i % PALETTE.length]]),
-);
 
 function buildElbowLinks() {
   const nodeById = Object.fromEntries(FAMILY_NODES.map((n) => [n.id, n]));
@@ -334,19 +264,17 @@ function buildFamilyTreeOption(selectedModel) {
       model: n.model,
       value: [n.x, n.y],
       symbol: 'roundRect',
-      symbolSize: n.hub ? [50, 24] : [46, 22],
-      itemStyle: n.hub
-        ? { color: '#f8fafc', borderColor: '#cbd5e1', borderType: 'dashed', borderWidth: 1 }
-        : {
+      symbolSize: n.hub ? [60, 30] : [56, 28],
+      itemStyle: {
             color: isSelected ? '#2563eb' : '#eff6ff',
             borderColor: isSelected ? '#1d4ed8' : '#bfdbfe',
             borderWidth: isSelected ? 2 : 1,
           },
       label: {
         show: true,
-        fontSize: 9,
-        lineHeight: 10.5,
-        color: n.hub ? '#94a3b8' : (isSelected ? '#fff' : '#1e40af'),
+        fontSize: 10,
+        lineHeight: 12,
+        color: isSelected ? '#fff' : '#1e40af',
         fontWeight: isSelected ? 700 : 600,
       },
     };
@@ -378,8 +306,8 @@ const TREE_GRID = { left: 28, right: 28, top: 20, bottom: 10, height: 300 };
 
 function treeNodeBtnStyle(n) {
   return {
-    left: `calc(${TREE_GRID.left}px + (100% - ${TREE_GRID.left + TREE_GRID.right}px) * ${n.x / 100} - 23px)`,
-    top: `${TREE_GRID.top + (n.y / 100) * (TREE_GRID.height - TREE_GRID.top - TREE_GRID.bottom) - 11}px`,
+    left: `calc(${TREE_GRID.left}px + (100% - ${TREE_GRID.left + TREE_GRID.right}px) * ${n.x / 100} - 28px)`,
+    top: `calc(${TREE_GRID.top}px + (100% - ${TREE_GRID.top + TREE_GRID.bottom}px) * ${n.y / 100} - 14px)`,
   };
 }
 
@@ -423,12 +351,12 @@ function FamilyTreeCard({ selectedModel, onSelectModel }) {
   return (
     <div className="az-card">
       <div className="az-card-hd">
-        <h3>통계모델 계보도</h3>
-        <p>ARIMA 계열 모델 구조와 비교 흐름</p>
+        <h3>1. 통계모델 확장 구조</h3>
+        <p>ARIMA → ARIMAX / SARIMA → SARIMAX · 발산 모델은 별도 제외</p>
       </div>
       <div className="sm-tree-wrap">
         <EChart
-          height={300}
+          fill
           option={buildFamilyTreeOption(selectedModel)}
           onEvents={{
             click: (p) => { if (p.data?.model) onSelectModel(p.data.model); },
@@ -453,32 +381,58 @@ function FamilyTreeCard({ selectedModel, onSelectModel }) {
         </div>
         {hoverNode && hoverMeta && anchor && <TreeTooltip anchor={anchor} model={hoverNode.model} meta={hoverMeta} />}
       </div>
+      <p className="sm-family-note" title={`${ARIMA_PARAM.range} · ${ARIMA_PARAM.method} · ${ARIMA_PARAM.criterion}`}>센터 × SKU × 주 단위 · AICc 기준 구조 결정 · 1주·2주·4주 후 평가 ⓘ</p>
     </div>
   );
 }
 
-function HeatmapCard({ data, error, selectedModel, onSelectModel }) {
+function MetricMenu({ value, onChange }) {
+  return <select className="sm-metric-menu" aria-label="평가지표 선택" value={value} onChange={(event) => onChange(event.target.value)}>{METRICS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select>;
+}
+
+function CardFilters({ center, onCenterChange, metric, onMetricChange, children }) {
+  return <div className="sm-card-filters"><select className="sm-metric-menu" aria-label="센터 선택" title={center === 'ALL' ? 'A/B센터 전체 예측행을 합산해 계산한 성능' : `${center}센터 예측행 기준 성능`} value={center} onChange={(event) => onCenterChange(event.target.value)}>{CENTERS.map((item) => <option key={item.value} value={item.value}>{item.label === 'ALL' ? '전체' : `${item.label}센터`}</option>)}</select>{metric && <MetricMenu value={metric} onChange={onMetricChange} />}{children}</div>;
+}
+
+function HeatmapCard({ center, onCenterChange, pageMetric: metric, onMetricChange: setMetric, selectedModel, onSelectModel }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let ignore = false;
+    setError(null);
+    setData(null);
+    api.getStatCommonHeatmap({ center, metric })
+      .then((d) => { if (!ignore) setData(d); })
+      .catch((e) => { if (!ignore) { setError(e.message); setData(null); } });
+    return () => { ignore = true; };
+  }, [center, metric]);
+
   return (
     <div className="az-card">
-      <div className="az-card-hd">
-        <h3>모델별 예측시점 성능</h3>
-        <p>모델별 · 예측기간별 {data?.metric || ''} 비교</p>
+      <div className="az-card-hd sm-card-hd-row">
+        <div>
+          <h3>2. 동일 조건 모델 성능 비교</h3>
+          <p>공통 예측 row 기준 · {data?.metric || metric} · {metricGuide(data?.metric || metric)}</p>
+        </div>
+        <CardFilters center={center} onCenterChange={onCenterChange} metric={metric} onMetricChange={setMetric} />
       </div>
       {error && <div className="az-hint az-hint-error">{error}</div>}
       {!error && !data && <div className="az-hint">불러오는 중...</div>}
       {!error && data && (
         <>
-          <EChart
-            height={280}
+          <div className="sm-equal-heatmap-slot"><EChart
+            height={190}
             option={buildHeatmapOption(data, selectedModel)}
             onEvents={{
               click: (p) => { if (p.data?.model) onSelectModel(p.data.model); },
             }}
           />
-          <div className="sm-scale-bar">
-            <span>{data.metric === 'Bias' ? '음수(과소예측)' : '낮음(우수)'}</span>
+          </div>
+          <div className="sm-scale-bar sm-heatmap-legend">
+            <span>{data.metric === 'Bias' ? '0에 가까움(우수)' : '낮음(우수)'}</span>
             <span className="sm-scale-gradient" />
-            <span>{data.metric === 'Bias' ? '양수(과대예측) · 0에 가까울수록 좋음' : '높음(미흡)'}</span>
+            <span>{data.metric === 'Bias' ? '|Bias| 큼(미흡)' : '높음(미흡)'}</span><span className="sm-legend-note">{data.metric === 'Bias' ? '굵은 값: 시점별 최소 |Bias|' : '굵은 값: 시점별 최저 오차'}</span>
           </div>
         </>
       )}
@@ -487,10 +441,12 @@ function HeatmapCard({ data, error, selectedModel, onSelectModel }) {
 }
 
 function buildHeatmapOption(data, selectedModel) {
+  data = { ...data, rows: data.rows.filter((r) => !r.is_extreme) };
   const horizons = data.horizons;
   const models = data.rows.map((r) => r.label);
-  const bound = Math.max(Math.abs(data.color_scale.min), Math.abs(data.color_scale.max));
-  const { min, max } = data.metric === 'Bias' ? { min: -bound, max: bound } : data.color_scale;
+  const magnitudes = data.rows.flatMap((r) => Object.values(r.values)).filter(Number.isFinite).map((v) => data.metric === 'Bias' ? Math.abs(v) : v);
+  const min = magnitudes.length ? Math.min(...magnitudes) : 0;
+  const max = magnitudes.length ? Math.max(...magnitudes) : 1;
   const selectedIdx = data.rows.findIndex((r) => r.model === selectedModel);
 
   const cells = [];
@@ -498,30 +454,36 @@ function buildHeatmapOption(data, selectedModel) {
     horizons.forEach((h, xi) => {
       const raw = row.values[h];
       if (!Number.isFinite(raw)) return;
-      const clipped = Math.min(Math.max(raw, min), max);
-      cells.push({ value: [xi, yi, clipped], raw, model: row.model, label: row.label });
+      const clipped = Math.min(Math.max(data.metric === 'Bias' ? Math.abs(raw) : raw, min), max);
+      const best = Math.min(...data.rows.map((candidate) => candidate.values[h]).filter(Number.isFinite).map((v) => data.metric === 'Bias' ? Math.abs(v) : v));
+      const isBest = clipped === best;
+      cells.push({ value: [xi, yi, clipped], raw, model: row.model,
+        label: { fontWeight: isBest ? 800 : 500, fontSize: isBest ? 13 : 12 },
+        modelLabel: row.label, nRows: row.n_rows?.[h],
+      });
     });
   });
 
   return {
-    grid: { left: 96, right: 16, top: 10, bottom: 26 },
+    grid: { left: 82, right: 82, top: 10, height: 130 },
     tooltip: {
       ...LIGHT_TOOLTIP,
-      formatter: (p) => `${p.data.label} · ${horizons[p.data.value[0]]}<br/>${data.metric}: ${fmtTooltip(p.data.raw)}`,
+      formatter: (p) => `${p.data.modelLabel} · ${BIAS_HORIZONS.find((item) => item.value === horizons[p.data.value[0]])?.label || horizons[p.data.value[0]]}<br/>${data.metric}: ${fmtTooltip(p.data.raw)}`
+        + (p.data.nRows ? `<br/>7개 모델 전체 공통 panel row ${p.data.nRows.toLocaleString()}건` : ''),
     },
     xAxis: {
-      type: 'category', data: horizons,
+      type: 'category', data: horizons.map((h) => BIAS_HORIZONS.find((item) => item.value === h)?.label || h),
       axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b', fontSize: 11 },
     },
     yAxis: {
       type: 'category', data: models, inverse: true,
       axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b', fontSize: 11 },
     },
-    visualMap: { min, max, show: false, seriesIndex: 0, inRange: { color: ['#bfdbfe', '#f8fafc', '#fecaca'] } },
+    visualMap: { min, max, show: false, seriesIndex: 0, inRange: { color: ['#7cb2ef', '#a0c8f4', '#c3dcf8', '#e0edfc', '#f5f9ff'] } },
     series: [{
       type: 'heatmap',
       data: cells,
-      label: { show: true, formatter: (p) => fmtMetric(p.data.raw), fontSize: 11, color: '#1e293b' },
+      label: { show: true, formatter: (p) => fmtMetric(p.data.raw), fontSize: 12, color: '#172554' },
       emphasis: { itemStyle: { borderWidth: 0 } },
     }, {
       type: 'custom', silent: true, z: 20, clip: false,
@@ -536,142 +498,107 @@ function buildHeatmapOption(data, selectedModel) {
   };
 }
 
-function ProfileCard({ data, error, selectedModel, onSelectModel }) {
-  return (
-    <div className="az-card">
-      <div className="az-card-hd">
-        <h3>예측시점별 성능 변화</h3>
-        <p>{data ? `${metricLabel(data.metric)} · ${metricGuide(data.metric)} (극단 모델 제외)` : '지표 불러오는 중'}</p>
-      </div>
-      {error && <div className="az-hint az-hint-error">{error}</div>}
-      {!error && !data && <div className="az-hint">불러오는 중...</div>}
-      {!error && data && (
-        <EChart
-          height={260}
-          option={buildProfileOption(data, selectedModel)}
-          onEvents={{
-            click: (p) => {
-              const s = data.series.find((x) => x.label === p.seriesName);
-              if (s) onSelectModel(s.model);
-            },
-          }}
-        />
-      )}
-    </div>
-  );
-}
-
-function buildProfileOption(data, selectedModel) {
-  return {
-    grid: { left: 46, right: 16, top: 16, bottom: 40 },
-    tooltip: { ...LIGHT_TOOLTIP, trigger: 'axis', formatter: (params) => `${metricLabel(data.metric)}<br/>${axisTooltipFormatter(params)}` },
-    legend: { bottom: 0, textStyle: { fontSize: 10.5, color: '#64748b' } },
-    color: PALETTE,
-    xAxis: { type: 'category', data: data.horizons, axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b' } },
-    yAxis: { type: 'value', name: metricLabel(data.metric), splitLine: { lineStyle: { color: '#f1f5f9' } }, axisLabel: { color: '#64748b', formatter: fmtAxisLabel } },
-    series: data.series.map((s) => {
-      const isSelected = s.model === selectedModel;
-      return {
-        name: s.label,
-        type: 'line',
-        data: s.values,
-        symbol: 'circle',
-        symbolSize: isSelected ? 7 : 5,
-        lineStyle: { width: isSelected ? 3.5 : 1.5, opacity: isSelected ? 1 : 0.35 },
-        itemStyle: { opacity: isSelected ? 1 : 0.35 },
-        z: isSelected ? 10 : 1,
-      };
-    }),
-  };
-}
-
-function BiasMapCard({ center, selectedModel, onSelectModel }) {
+function BiasMapCard({ center, onCenterChange, selectedModel, onSelectModel }) {
   const [horizon, setHorizon] = useState('h1');
-  const [data, setData] = useState(null);
+  const [profiles, setProfiles] = useState(null);
+  const data = profiles?.[horizon];
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let ignore = false;
     setError(null);
-    api.getStatWapeBias({ center, horizon, include_extreme: false })
-      .then((d) => { if (!ignore) setData(d); })
-      .catch((e) => { if (!ignore) { setError(e.message); setData(null); } });
+    setProfiles(null);
+    Promise.all(BIAS_HORIZONS.map(async ({ value: horizonValue }) => {
+      const response = await api.getStatCommonWapeBias({ center, horizon: horizonValue });
+      return [horizonValue, { points: response.points }];
+    }))
+      .then((results) => { if (!ignore) setProfiles(Object.fromEntries(results)); })
+      .catch((e) => { if (!ignore) { setError(e.message); setProfiles(null); } });
     return () => { ignore = true; };
-  }, [center, horizon]);
+  }, [center]);
 
   return (
     <div className="az-card">
       <div className="az-card-hd sm-card-hd-row">
         <div>
-          <h3>정확도 × 편향 비교</h3>
-          <p>WAPE × Bias 동시 비교</p>
+          <h3>5. 오차 크기와 과대·과소예측 안정성</h3>
+          <p>WAPE ↓ 오차 작을수록 우수 · Bias → 0에 가까울수록 우수</p>
         </div>
-        <div className="sm-seg" role="group" aria-label="예측시점 선택">
-          {BIAS_HORIZONS.map((h) => (
-            <button
-              key={h.value}
-              type="button"
-              className={`sm-seg-btn${horizon === h.value ? ' active' : ''}`}
-              onClick={() => setHorizon(h.value)}
-            >
-              {h.label}
-            </button>
-          ))}
-        </div>
+        <CardFilters center={center} onCenterChange={onCenterChange}><select className="sm-metric-menu" aria-label="예측시점 선택" value={horizon} onChange={(event) => setHorizon(event.target.value)}>{BIAS_HORIZONS.map((h) => <option key={h.value} value={h.value}>{h.label}</option>)}</select></CardFilters>
       </div>
       {error && <div className="az-hint az-hint-error">{error}</div>}
       {!error && !data && <div className="az-hint">불러오는 중...</div>}
       {!error && data && (
-        <EChart
-          height={230}
-          option={buildBiasOption(data, selectedModel)}
-          onEvents={{
-            click: (p) => { if (p.data?.model) onSelectModel(p.data.model); },
-          }}
-        />
+        <>
+          <EChart
+            fill
+            option={buildBiasOption(data, selectedModel, center, horizon, profiles)}
+            onEvents={{
+              click: (p) => { if (p.data?.model) onSelectModel(p.data.model); },
+            }}
+          />
+          <div className="sm-bias-legend">
+            <span><i className="sm-dot" style={{ background: '#2563eb' }} />정상 후보</span>
+            <span><i className="sm-dot" style={{ background: '#047857' }} />선정 모델(SARIMA)</span>
+
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-function buildBiasOption(data, selectedModel) {
+function buildBiasOption(data, selectedModel, center, horizon, profiles) {
+  const points = data.points.filter((p) => Number.isFinite(p.wape) && Number.isFinite(p.bias));
+  const allPoints = Object.values(profiles).flatMap((profile) => profile.points).filter((p) => Number.isFinite(p.wape) && Number.isFinite(p.bias));
+  const biasMin = Math.min(...allPoints.map((p) => p.bias), -BIAS_SAFE_BAND);
+  const biasMax = Math.max(...allPoints.map((p) => p.bias), BIAS_SAFE_BAND);
+  const biasPadding = Math.max((biasMax - biasMin) * .06, 1);
+  const wapeMin = allPoints.length ? Math.min(...allPoints.map((p) => p.wape)) : 0;
+  const wapeMax = allPoints.length ? Math.max(...allPoints.map((p) => p.wape)) : 1;
+  const wapePadding = Math.max((wapeMax - wapeMin) * .12, 1);
+  const yMin = Math.max(0, wapeMin - wapePadding);
+  const yMax = wapeMax + wapePadding;
+  const tickStep = (span) => {
+    const rough = Math.max(span / 5, .1);
+    const magnitude = 10 ** Math.floor(Math.log10(rough));
+    return [1, 2, 5, 10].find((step) => step * magnitude >= rough) * magnitude;
+  };
+  const interval = tickStep(Math.max(biasMax - biasMin + 2 * biasPadding, yMax - yMin));
+  const xLow = Math.floor((biasMin - biasPadding) / interval) * interval;
+  const xHigh = Math.ceil((biasMax + biasPadding) / interval) * interval;
+  const yLow = Math.max(0, Math.floor(yMin / interval) * interval);
+  const yHigh = Math.ceil(yMax / interval) * interval;
+  const reference = allPoints.filter((point) => point.model === 'SARIMA');
+  const referenceBias = Math.max(...reference.map((point) => Math.abs(point.bias)), BIAS_SAFE_BAND) + interval * .5;
+  const referenceWape = Math.max(...reference.map((point) => point.wape), yLow) + interval * .5;
   return {
-    grid: { left: 50, right: 20, top: 16, bottom: 30 },
-    tooltip: {
-      ...LIGHT_TOOLTIP,
-      formatter: (p) => `${p.data.modelLabel}<br/>WAPE ${fmtTooltip(p.data.value[0])} · Bias ${fmtTooltip(p.data.value[1])}`,
-    },
-    xAxis: { type: 'value', name: 'WAPE', axisLabel: { color: '#64748b', formatter: fmtAxisLabel }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
-    yAxis: { type: 'value', name: 'Bias', axisLabel: { color: '#64748b', formatter: fmtAxisLabel }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
-    series: [{
-      type: 'scatter',
-      data: data.points.map((p) => {
-        const isSelected = p.model === selectedModel;
-        return {
-          value: [p.wape, p.bias], model: p.model, modelLabel: p.label,
-          symbolSize: isSelected ? 20 : 11,
-          itemStyle: {
-            color: MODEL_COLOR[p.model] || '#93c5fd',
-            opacity: isSelected ? 1 : 0.8,
-            borderColor: isSelected ? '#fff' : 'transparent',
-            borderWidth: isSelected ? 2 : 0,
-          },
-          label: {
-            show: true,
-            formatter: (pp) => pp.data.modelLabel,
-            fontSize: isSelected ? 12 : 10.5,
-            fontWeight: isSelected ? 700 : 500,
-            color: isSelected ? '#1e293b' : '#94a3b8',
-          },
+    grid: { left: 52, right: 32, top: 28, bottom: 35 },
+    tooltip: { ...LIGHT_TOOLTIP, formatter: (p) => `${p.data.modelLabel}<br/>센터: ${center === 'ALL' ? '전체' : center} · 예측시점: ${BIAS_HORIZONS.find((item) => item.value === horizon)?.label || horizon}<br/>WAPE: ${fmtTooltip(p.data.wape)}%<br/>Bias: ${fmtTooltip(p.data.bias)}%${p.data.nRows ? `<br/>7개 모델 전체 공통 panel row ${p.data.nRows.toLocaleString()}건` : ''}` },
+    xAxis: { type: 'value', name: 'Bias (%)', nameLocation: 'middle', nameGap: 22, min: xLow, max: xHigh, interval, axisLabel: { formatter: fmtAxisLabel }, splitLine: { lineStyle: { color: '#eef2f6' } } },
+    yAxis: { type: 'value', name: 'WAPE (%) · 큼 ↑', min: yLow, max: yHigh, interval, axisLabel: { formatter: fmtAxisLabel }, splitLine: { lineStyle: { color: '#eef2f6' } } },
+    series: [{ type: 'scatter',
+      markArea: { silent: true,
+        itemStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: 'rgba(16,185,129,.03)' }, { offset: 1, color: 'rgba(16,185,129,.23)' }] } },
+        label: { color: '#047857', fontSize: 10, position: 'insideBottom', formatter: '낮은 오차 + 적은 편향' },
+        data: reference.length ? [[{ xAxis: Math.max(xLow, -referenceBias), yAxis: yLow }, { xAxis: Math.min(xHigh, referenceBias), yAxis: Math.min(yHigh, referenceWape) }]] : [],
+      },
+      data: points.map((p) => {
+        const color = p.model === 'SARIMA' ? '#059669' : '#2563eb';
+        return { ...p, symbol: 'circle', modelLabel: p.label, nRows: p.n_rows, value: [p.bias, p.wape],
+          symbolSize: 14,
+          itemStyle: { color, borderColor: color, borderWidth: 1, opacity: 1 },
+          label: { show: true, formatter: p.label, position: 'top', distance: 12, fontSize: 11, fontWeight: 650, color, backgroundColor: 'rgba(255,255,255,.9)', padding: [2, 3] },
+          emphasis: { scale: false },
         };
       }),
-      labelLayout: { moveOverlap: 'shiftY' },
-      markLine: {
-        silent: true, symbol: 'none',
-        lineStyle: { color: '#cbd5e1', type: 'dashed' },
-        label: { show: false },
-        data: [{ yAxis: 0 }],
-      },
+      labelLayout: (params) => ({
+        x: params.rect.x + params.rect.width / 2 + (params.dataIndex % 2 ? 24 : -24),
+        y: params.rect.y - 18 - Math.floor(params.dataIndex / 2) * 18,
+        align: params.dataIndex % 2 ? 'left' : 'right',
+        verticalAlign: 'bottom', hideOverlap: false, moveOverlap: 'shiftY',
+      }),
+      labelLine: { show: true, length2: 8, lineStyle: { color: '#94a3b8', width: 1 } },
     }],
   };
 }
@@ -695,7 +622,7 @@ function CenterResultMatrix({ data }) {
       <table className="sm-center-result-table">
         <caption>{metricLabel(data.metric)}</caption>
         <thead><tr><th scope="col">센터</th>{BIAS_HORIZONS.map((h) => <th scope="col" key={h.value}>{h.label}</th>)}</tr></thead>
-        <tbody>{['ALL', 'A', 'B'].map((center) => {
+        <tbody>{CENTER_COMPARE_ORDER.map((center) => {
           const series = data.series.find((item) => item.center === center);
           return <tr key={center}>
             <th scope="row">{center === 'ALL' ? '전체' : `${center}센터`}</th>
@@ -712,123 +639,377 @@ function CenterResultMatrix({ data }) {
 }
 
 function CenterCompareCard({ data, error, metric, selectedModel }) {
+  const excluded = EXCLUDED_MODELS.includes(selectedModel);
+
   return (
     <div className="az-card">
-      <div className="az-card-hd">
-        <h3>센터별 성능 비교{` (${MODEL_META[selectedModel].label})`}</h3>
-        <p>{metricLabel(metric)} · {metricGuide(metric)} (1·2·4주 후)</p>
+      <div className="az-card-hd sm-card-hd-row">
+        <div>
+          <h3>6. {selectedModel === 'SARIMA' ? '선정 SARIMA의 센터별 성능' : `${MODEL_META[selectedModel].label}의 센터별 성능`}</h3>
+          <p>{metricLabel(metric)} · {metricGuide(metric)} <span title="ALL은 A/B 단순 평균이 아닌 전체 관측치를 합산한 pooled metric입니다.">ⓘ</span></p>
+        </div>
       </div>
       {error && <div className="az-hint az-hint-error">{error}</div>}
       {!error && !data && <div className="az-hint">불러오는 중...</div>}
-      {!error && data && (data.series.some((s) => s.values.some(Number.isFinite))
-        ? (needsCenterMatrix(data) ? <CenterResultMatrix data={data} /> : <EChart height={260} option={buildCenterCompareOption(data)} />)
+      {excluded && <div className="sm-excluded-notice">2024 Holdout 안정성 실패로 센터별 정상 비교에서 제외된 모델입니다. 발산 결과 카드를 확인하세요.</div>}
+      {!excluded && !error && data && (data.series.some((s) => s.values.some(Number.isFinite))
+        ? (needsCenterMatrix(data) ? <CenterResultMatrix data={data} /> : <EChart fill option={buildCenterCompareOption(data)} />)
         : <div className="az-hint">해당 지표 데이터 없음</div>)}
+      {!excluded && selectedModel === 'SARIMA' && <p className="sm-center-stability">A/B센터 모두 1주·2주·4주 후 성능 급변 없이 유지</p>}
     </div>
   );
 }
 
 function buildCenterCompareOption(data) {
-  const categories = data.series.map((s) => (s.center === 'ALL' ? 'ALL' : `${s.center}센터`));
+  const visibleSeries = data.series.filter((s) => s.center !== 'ALL');
+  const categories = visibleSeries.map((s) => `${s.center}센터`);
   return {
-    grid: { left: 46, right: 16, top: 30, bottom: 40 },
+    grid: { left: 62, right: 42, top: 34, bottom: 38 },
     tooltip: { ...LIGHT_TOOLTIP, trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: (params) => `${metricLabel(data.metric)}<br/>${axisTooltipFormatter(params)}` },
-    legend: { bottom: 0, textStyle: { fontSize: 10.5, color: '#64748b' } },
-    color: PALETTE,
-    xAxis: { type: 'category', data: categories, axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b' } },
-    yAxis: { type: 'value', name: metricLabel(data.metric), splitLine: { lineStyle: { color: '#f1f5f9' } }, axisLabel: { color: '#64748b', formatter: fmtAxisLabel } },
-    series: data.horizons.map((h, hi) => ({
-      name: h,
+    color: ['#1d4ed8', '#3b82f6', '#93c5fd'],
+    legend: { bottom: 0, textStyle: { color: '#475569', fontSize: 11 } },
+    xAxis: { type: 'value', name: metricLabel(data.metric), splitLine: { lineStyle: { color: '#f1f5f9' } }, axisLabel: { color: '#64748b', formatter: fmtAxisLabel } },
+    yAxis: { type: 'category', inverse: true, data: categories, axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b' } },
+    series: data.horizons.map((horizon, horizonIdx) => ({
+      name: BIAS_HORIZONS.find((item) => item.value === horizon)?.label || horizon,
       type: 'bar',
-      barMaxWidth: 22,
-      label: { show: true, position: 'top', fontSize: 9.5, fontWeight: 600, color: '#64748b', formatter: (p) => fmtMetric(p.value) },
-      data: data.series.map((s) => s.values[hi]),
+      barMaxWidth: 25,
+      label: { show: true, position: 'right', fontSize: 10, distance: 5, fontWeight: 700, color: '#1e293b', formatter: (p) => fmtTooltip(p.value) },
+      data: visibleSeries.map((s) => s.values[horizonIdx]),
     })),
   };
 }
 
-function DetailCard({ selectedModel, onOpenDetail }) {
+function buildExtremeHeatmap(rows, horizons, center) {
+  const cells = rows.flatMap((row, y) => horizons.flatMap((h, x) => {
+    const raw = row.values[h];
+    return Number.isFinite(raw) ? [{ value: [x, y, Math.log10(Math.max(Math.abs(raw), 1))], raw, label: row.label, horizon: h }] : [];
+  }));
+  return {
+    grid: { left: 82, right: 82, top: 10, height: 52 },
+    tooltip: { ...LIGHT_TOOLTIP, formatter: (p) => `${p.data.label} · ${center === 'ALL' ? '전체' : `${center}센터`} · ${BIAS_HORIZONS.find((item) => item.value === p.data.horizon)?.label || p.data.horizon}<br/>WAPE: ${fmtTooltip(p.data.raw)}` },
+    xAxis: { type: 'category', data: horizons.map((h) => BIAS_HORIZONS.find((item) => item.value === h)?.label || h), axisLine: { show: false }, axisTick: { show: false } },
+    yAxis: { type: 'category', inverse: true, data: rows.map((r) => r.label), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { fontSize: 10 } },
+    visualMap: { show: false, min: Math.min(...cells.map((c) => c.value[2]), 0), max: Math.max(...cells.map((c) => c.value[2]), 1), inRange: { color: ['#fff5f5', '#fee2e2', '#fecaca', '#f8a6a6', '#ef8585'] } },
+    series: [{ type: 'heatmap', data: cells, label: { show: true, formatter: (p) => `${fmtTooltip(p.data.raw)}`, fontSize: 12, fontWeight: 650, color: '#641b1b' }, itemStyle: { borderColor: '#fff', borderWidth: 2 } }],
+  };
+}
+
+function CoverageMiniTable({ entries }) {
+  return <table className="sm-coverage-table">
+    <thead><tr><th>모델</th><th>정상 예측</th><th>constant</th><th>naive_mean</th><th>cold-start</th></tr></thead>
+    <tbody>{entries.map((e) => <tr key={e.model}>
+      <td>{e.label}</td>
+      <td>{(e.normal_rate * 100).toFixed(1)}% ({e.n_normal.toLocaleString()}건)</td>
+      <td>{e.n_fallback_constant.toLocaleString()}</td>
+      <td>{e.n_fallback_naive_mean.toLocaleString()}</td>
+      <td>{e.n_has_observed_history_false.toLocaleString()}</td>
+    </tr>)}</tbody>
+  </table>;
+}
+
+function DivergenceCausesCard({ center, onCenterChange }) {
+  const [heatmap, setHeatmap] = useState(null);
+  const [coverage, setCoverage] = useState(null);
+  const [error, setError] = useState(null);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    let ignore = false;
+    setHeatmap(null);
+    setError(null);
+    api.getStatCommonHeatmap({ center, metric: 'WAPE' })
+      .then((result) => { if (!ignore) setHeatmap(result); })
+      .catch((err) => { if (!ignore) setError(err.message); });
+    return () => { ignore = true; };
+  }, [center]);
+  useEffect(() => {
+    let ignore = false;
+    api.getStatCoverage().then((result) => { if (!ignore) setCoverage(result.entries); }).catch(() => {});
+    return () => { ignore = true; };
+  }, []);
+  useEffect(() => {
+    if (!open) return;
+    const close = (event) => { if (event.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [open]);
+
+  const extremeRows = heatmap ? heatmap.rows.filter((r) => r.is_extreme) : null;
+  const extremeCoverage = coverage ? coverage.filter((e) => e.is_extreme) : null;
+
+  return <div className="az-card sm-divergence-card sm-clickable-card" role="button" tabIndex={0} aria-label="발산 결과 상세 진단 보기" aria-haspopup="dialog"
+    onClick={(event) => { if (!event.target.closest('select') && !open) setOpen(true); }}
+    onKeyDown={(event) => { if (event.target === event.currentTarget && ['Enter', ' '].includes(event.key)) { event.preventDefault(); setOpen(true); } }}>
+    <div className="az-card-hd sm-card-hd-row"><div><h3>4. ARIMAX-S1·S4 수치 발산 → 비교 제외</h3><p>정상적인 오차 범위를 넘어 예측값이 폭증함 · 공통 row 기준 ({center === 'ALL' ? '전체' : `${center}센터`})</p></div><CardFilters center={center} onCenterChange={onCenterChange} /></div>
+    {error && <div className="az-hint">{error}</div>}
+    {!error && !extremeRows && <div className="az-hint">불러오는 중...</div>}
+    {extremeRows && extremeRows.length > 0 && <div className="sm-equal-heatmap-slot"><EChart height={88} option={buildExtremeHeatmap(extremeRows, heatmap.horizons, center)} /></div>}
+    <div className="sm-scale-bar sm-heatmap-legend sm-extreme-legend"><span>작음</span><span className="sm-scale-gradient sm-extreme-gradient" /><span>큼</span></div>
+    {open && createPortal(<div className="sm-modal-backdrop" onClick={(event) => { event.stopPropagation(); setOpen(false); }}><div className="sm-modal" role="dialog" aria-modal="true" aria-labelledby="sm-diagnostic-title" onClick={(e) => e.stopPropagation()}><div className="sm-modal-hd"><h3 id="sm-diagnostic-title">발산 결과 상세 진단</h3><button autoFocus className="sm-modal-close" aria-label="닫기" onClick={() => setOpen(false)}>✕</button></div><div className="sm-modal-body">
+      {DIVERGENCE_CAUSES.map((cause) => <section className="sm-modal-section" key={cause.n}><h4>{cause.n}. {cause.title}</h4><p>{cause.detail}</p></section>)}
+      {extremeCoverage && <section className="sm-modal-section"><h4>7. 모델별 정상/fallback 현황(own 전체 population 기준)</h4><CoverageMiniTable entries={extremeCoverage} /><p className="sm-modal-note">정상 예측 비율이 낮을수록(즉 constant/naive_mean/cold-start로 대체된 행이 많을수록) auto_arima/SARIMAX fit 자체가 실패했다는 뜻입니다. 위 WAPE 극단값은 이 fallback 비율과는 별개로, "정상"으로 분류된 fit 결과 자체가 발산한 경우도 포함합니다.</p></section>}
+      <p className="sm-modal-verdict">현재 검증 범위에서는 정렬/저장 오류가 아니라 모델의 예측 안정성 실패로 판단</p>
+    </div></div></div>, document.body)}
+  </div>;
+}
+
+function statPerfEntry(holdoutPerf, horizon, model) {
+  return holdoutPerf?.[horizon]?.entries.find((e) => e.key === model) || null;
+}
+
+function statStatus(model) {
+  if (model === 'SARIMA') return { tone: 'final', text: '최종 선정' };
+  if (EXCLUDED_MODELS.includes(model)) return { tone: 'excluded', text: '발산으로 비교 제외' };
+  return { tone: 'normal', text: '미선정' };
+}
+
+function modelUiSummary(model, meta) {
+  const exog = meta.columns.filter((item) => item.col !== 'qty_log1p').map((item) => item.col);
+  const isArimax = model.startsWith('ARIMAX');
+  const isSarimax = model.startsWith('SARIMAX');
+  const description = model === 'ARIMAX_S2'
+    ? 'ARIMA에 COVID 시기 여부를 추가하여 수요 변화 반영 여부를 검증한 모델'
+    : meta.oneLiner;
+  const structure = model === 'ARIMA_S0' ? 'ARIMA (p,d,q)'
+    : model === 'SARIMA' ? 'ARIMA (p,d,q) + 계절구조 (P,D,Q,m)'
+      : isSarimax ? '계절구조 (p,d,q)(P,D,Q,m) + 외부변수' : 'ARIMA (p,d,q) + 외부변수';
+  const decision = model === 'ARIMA_S0' ? ['상품별 AICc 최솟값 선택', 'auto_arima 탐색으로 비계절 구조 결정']
+    : model === 'SARIMA' ? ['상품별 AICc 최솟값 선택', 'ARIMA 구조를 유지하고 계절구조를 추가 탐색']
+      : isSarimax ? ['SARIMA와 동일 후보에서 독립 적합', '외부변수를 포함한 상태에서 구조별 수렴·AICc 확인']
+        : ['ARIMA 확정 구조 그대로 사용', '(p,d,q)는 재탐색하지 않고 외부변수만 추가'];
+  return {
+    description, exog,
+    input: ['qty_log1p', ...exog].join(' + '),
+    inputNote: exog.length ? `주간 판매량 시계열에 ${exog.join(' · ')} 추가` : '주간 판매량 시계열만 사용',
+    structure,
+    structureNote: model === 'ARIMA_S0' ? '비계절 시계열 기준 구조' : model === 'SARIMA' ? '비계절 구조에 반복 계절 패턴 결합' : isSarimax ? '계절 시계열 구조에 외부정보 결합' : '비계절 시계열 구조에 외부정보 결합',
+    decision,
+    baseStructure: model === 'ARIMA_S0' ? '상품별 (p,d,q)를 새로 탐색' : model === 'SARIMA' ? 'ARIMA 단계에서 확정한 상품별 (p,d,q) 구조 사용' : isSarimax ? 'SARIMA와 동일한 상품별 후보 구조 사용' : 'ARIMA 단계에서 확정한 상품별 (p,d,q) 구조 사용',
+  };
+}
+
+function variableRole(column) {
+  if (column === 'qty_log1p') return '예측 대상 시계열';
+  if (column === 'covid_flag') return 'COVID 시기의 수요 변화를 설명하는 외부변수';
+  if (column.startsWith('ccsi')) return '소비심리 변화가 수요에 미치는 영향을 설명하는 외부변수';
+  if (column.startsWith('cpi')) return '물가 수준·변화가 수요에 미치는 영향을 설명하는 외부변수';
+  if (column.startsWith('공휴일_')) return '명절 전후 수요 변화를 설명하는 외부변수';
+  return '모델 입력 변수';
+}
+
+function detailPreprocessing(preprocessing) {
+  return preprocessing.flatMap((item) => {
+    if (item.target === 'target(qty)') return [{ target: '판매수량', method: 'log(판매수량 + 1) 변환', reason: '0 판매량을 포함해 로그 변환하고 큰 판매량 값의 영향을 완화' }];
+    if (item.target === '예측값') return [{ target: '예측값', method: 'expm1 역변환 후 0 미만은 0으로 보정', reason: '원래 판매수량 단위로 복원' }];
+    if (!item.target.includes('미수렴')) return [{ target: item.target.replace('target(qty)', '판매수량'), method: item.method, reason: item.reason }];
+    return [
+      { target: '미수렴', method: '같은 탐색에서 수렴한 후보 중 AICc가 가장 작은 구조 사용', reason: '모델 후보 일부가 적합되지 않는 경우 대응' },
+      { target: '이력 부족 / cold-start', method: 'KAN 소분류 → 중분류 → 대분류 → 센터 평균 순으로 보완', reason: '자체 판매이력이 부족한 상품의 예측값 보완' },
+      { target: '최종 fallback', method: 'naive_mean으로 과거 이력 평균 사용', reason: '앞선 방식 적용이 어려운 경우 예측값 생성' },
+    ];
+  });
+}
+
+function detailParameters(model, config, summary) {
+  if (model.startsWith('ARIMAX')) return [
+    ['(p,d,q)', '비계절 AR·차분·MA 구조', 'ARIMA 단계에서 상품별로 확정한 값 그대로 사용, 재탐색 없음'],
+    ['with_intercept', '상수항 포함 여부', 'ARIMA 단계에서 확정한 상품별 설정 그대로 사용'],
+    ['외부변수', '추가 설명변수', summary.exog.join(' · ')],
+    ['구조 결정', 'ARIMAX 구조 적용 방식', `기존 ARIMA 구조는 유지하고 ${summary.exog.join(' · ')}만 추가`],
+  ];
+  if (model === 'SARIMAX_S4') return [
+    ['(p,d,q)', '비계절 AR·차분·MA 구조', 'SARIMA와 동일한 상품별 후보 구조 사용'],
+    ['(P,D,Q,m)', '계절 구조', 'SARIMA와 동일한 후보 범위에서 외부변수 포함 상태로 독립 적합'],
+    ['외부변수', '추가 설명변수', summary.exog.join(' · ')],
+    ['구조 결정', 'SARIMAX 구조 적용 방식', '외부변수를 포함해 수렴 여부와 AICc를 독립적으로 확인'],
+  ];
+  return config.actualParams.map((item) => [item.param, item.purpose, item.value]);
+}
+
+function fmtDetailMetric(value) {
+  if (!Number.isFinite(value)) return '-';
+  if (Math.abs(value) >= 1e12) return value.toExponential(2).replace('e+', 'e');
+  return value.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function DetailCard({ selectedModel, holdoutPerf, onOpenDetail }) {
   const meta = MODEL_META[selectedModel];
-  if (!meta) return null;
+  const config = STAT_MODEL_DETAIL[selectedModel];
+  if (!meta || !config) return null;
+
+  const status = statStatus(selectedModel);
+  const summary = modelUiSummary(selectedModel, meta);
+
   return (
-    <button type="button" className="az-card sm-detail-card" onClick={onOpenDetail}>
-      <div className="az-card-hd">
-        <h3>선택 모델 요약</h3>
+    <div className="az-card sm-detail-card-wrap sm-clickable-summary" role="button" tabIndex={0} aria-haspopup="dialog" onClick={onOpenDetail} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpenDetail(); } }}>
+      <div className="az-card-hd sm-card-hd-row">
+        <div><h3>{selectedModel === 'SARIMA' ? '3. 통계 대표모델 SARIMA' : `3. 선택 모델 ${meta.label}`}</h3></div>
       </div>
-      <div className="az-detail-title">{meta.label}</div>
-      <div className="sm-detail-oneliner">{meta.oneLiner}</div>
-      <div className="az-detail-row"><span className="az-detail-label">예측 대상</span><span className="az-detail-value">센터 × SKU별 주간 판매수량</span></div>
-      <div className="az-detail-row"><span className="az-detail-label">사용 정보</span><span className="az-detail-value">{meta.usedInfo}</span></div>
-      <div className="az-detail-row"><span className="az-detail-label">구조</span><span className="az-detail-value">{meta.structureEasy}</span></div>
-      <div className="az-detail-row"><span className="az-detail-label">파라미터 결정</span><span className="az-detail-value">{meta.paramShort}</span></div>
-      <div className="az-detail-row"><span className="az-detail-label">최종 판단</span><span className="az-detail-value">{meta.verdict.reason}</span></div>
-      <span className="sm-detail-more">상세 보기 →</span>
-    </button>
+      <div className={`az-detail-title sm-model-status is-${status.tone}`}><strong>{meta.label}</strong><span>{selectedModel === 'SARIMA' ? '통계 대표모델' : status.text}</span></div>
+      <p className="sm-model-summary-line">{selectedModel === 'SARIMA' ? '상품별 과거 판매량에서 반복되는 계절 패턴까지 반영하는 시계열 모델' : summary.description}</p>
+      <div className="sm-sarima-structure sm-sarima-main-boxes">
+        <div><b>입력 변수</b><span><code>{summary.input}</code></span><small>{selectedModel === 'SARIMA' ? '주간 판매량을 log(판매수량+1)로 변환' : summary.inputNote}</small></div>
+        <div><b>계절주기</b><span><code>{selectedModel === 'SARIMA' ? '계절주기 후보 13·26·52주' : summary.structure}</code></span><small>{selectedModel === 'SARIMA' ? 'A센터: 13·26·52주 탐색 · B센터: 13·26주 탐색' : summary.structureNote}</small></div>
+        <div><b>구조 결정</b><span><code>{selectedModel === 'SARIMA' ? '센터×상품별 AICc 최소 구조 선택' : summary.decision[0]}</code></span><small>{selectedModel === 'SARIMA' ? '적합도와 복잡도를 고려해 계절구조 결정' : summary.decision[1]}</small></div>
+      </div>
+      {selectedModel === 'SARIMA' && <p className="sm-selection-reason">계절성 반영 · B센터 단기예측 안정화 · 외생변수 모델의 수치 불안정 회피</p>}
+    </div>
   );
 }
 
-function DetailModal({ model, onClose }) {
-  const meta = MODEL_META[model];
+const MODE_LABEL = { search: '탐색', fixed: '고정', auto: '자동 결정' };
 
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose(); }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+function ModeTag({ mode }) {
+  return <span className={`mdl-mode-tag mdl-mode-${mode}`}>{MODE_LABEL[mode] || mode}</span>;
+}
 
-  if (!meta) return null;
-
+function SourceBlock({ title, data }) {
   return (
-    <div className="sm-modal-backdrop" onClick={onClose}>
-      <div className="sm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="sm-modal-hd">
-          <h3>{meta.label}</h3>
-          <button className="sm-modal-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="sm-modal-body">
-          <section className="sm-modal-section">
-            <h4>① 모델 개요</h4>
-            <p>{meta.oneLiner}. {meta.why}</p>
-          </section>
-
-          <section className="sm-modal-section">
-            <h4>② 입력 데이터 / 컬럼</h4>
-            <p>{INPUT_DATA}</p>
-            <p>학습: development_2021_2023.parquet · 평가: holdout_2024.parquet</p>
-            <table className="sm-modal-table">
-              <thead><tr><th>컬럼명</th><th>컬럼 설명</th><th>모델에서의 활용 목적</th></tr></thead>
-              <tbody>
-                {inputColumns(model, meta).map((c) => (
-                  <tr key={c.col}><td><code>{c.col}</code></td><td>{c.meaning}</td><td>{c.purpose}</td></tr>
-                ))}
-              </tbody>
-            </table>
-          </section>
-
-          <section className="sm-modal-section">
-            <h4>③ 모델 구조 / 외생변수 구성</h4>
-            <p>외생변수: {meta.exog ? meta.columns.filter((c) => c !== QTY_COLUMN).map((c) => c.col).join(" · ") : "없음"}</p>
-            <p>{meta.structureEasy} — 계절성 {meta.seasonal ? '사용' : '미사용'}, 외생변수 {meta.exog ? '사용' : '미사용'}</p>
-          </section>
-
-          <section className="sm-modal-section">
-            <h4>④ 파라미터 결정 방법</h4>
-            <div className="sm-modal-kv"><span>탐색 범위</span><span>{meta.paramSearch.range}</span></div>
-            <div className="sm-modal-kv"><span>탐색 방식</span><span>{meta.paramSearch.method}</span></div>
-            <div className="sm-modal-kv"><span>선정 기준</span><span>{meta.paramSearch.criterion}</span></div>
-            <div className="sm-modal-kv"><span>미수렴 처리</span><span>{meta.paramSearch.nonConvergence}</span></div>
-            {model === 'SARIMA' && (
-              <p className="sm-modal-note">p = 과거 판매값 영향 범위 · d = 차분 횟수 · q = 과거 예측오차 영향 범위 · m = 계절 반복주기</p>
-            )}
-          </section>
-
-          <section className="sm-modal-section">
-            <h4>⑤ 선택 근거</h4>
-            <p className={meta.verdict.selected ? 'sm-modal-verdict sm-modal-verdict-yes' : 'sm-modal-verdict'}>
-              {meta.verdict.selected ? '통계 대표모델로 선정' : '대표모델로 선정되지 않음'} — {meta.verdict.reason}
-            </p>
-          </section>
-        </div>
-      </div>
+    <div className="mdl-source-group">
+      <div className="mdl-source-title">{title}</div>
+      <div className="mdl-source-meta"><b>출처</b> · {data.source}<br /><b>참고 이유</b> · {data.reason}</div>
+      {data.rows.length > 0 ? (
+        <table className="mdl-table">
+          <thead><tr><th>파라미터</th><th>목적</th><th>{title === '선행연구' ? '선행연구 범위' : '공식 기본값 / 범위'}</th></tr></thead>
+          <tbody>{data.rows.map((r) => <tr key={r.param}><td><code>{r.param}</code></td><td>{r.purpose}</td><td>{r.range}</td></tr>)}</tbody>
+        </table>
+      ) : <div className="mdl-source-none">명시적 범위 없음</div>}
     </div>
   );
+}
+
+function statPerfRows(holdoutPerf, model) {
+  return BIAS_HORIZONS.map((h) => ({ horizon: h, entry: statPerfEntry(holdoutPerf, h.value, model) }));
+}
+
+function SarimaDetailModal({ onClose }) {
+  const sections = [
+    {
+      id: 'overview', heading: '개요',
+      body: <div className="sm-stat-detail-uniform"><table className="mdl-table"><tbody>
+        <tr><th>모델</th><td><b>SARIMA</b></td></tr>
+        <tr><th>설명</th><td>상품별 과거 주간 판매량의 <b>비계절 패턴과 반복되는 계절 패턴을 함께 반영</b>하는 시계열 모델</td></tr>
+        <tr><th>모델 단위</th><td><b>센터 × 상품별 개별 모델</b></td></tr>
+        <tr><th>외부변수</th><td>사용하지 않음</td></tr>
+        <tr><th>예측 시점</th><td><b>1주 · 2주 · 4주 후</b></td></tr>
+        <tr><th>역할</th><td><b>통계모델 대표모델</b></td></tr>
+      </tbody></table></div>,
+    },
+    {
+      id: 'variables', heading: '사용 변수',
+      body: <div className="sm-stat-detail-uniform"><table className="mdl-table"><thead><tr><th>컬럼명</th><th>컬럼 설명</th><th>사용 방식</th></tr></thead><tbody><tr><td><code>qty_log1p</code></td><td>주간 판매수량을 <code>log(판매수량 + 1)</code>로 변환한 값</td><td>SARIMA 입력 시계열</td></tr></tbody></table></div>,
+    },
+    {
+      id: 'preprocessing', heading: '전처리',
+      body: <div className="sm-stat-detail-uniform"><table className="mdl-table"><thead><tr><th>단계</th><th>처리 내용</th></tr></thead><tbody>
+        <tr><td>로그 변환</td><td>주간 판매수량을 <code>log(판매수량 + 1)</code>로 변환하여 <code>qty_log1p</code> 생성</td></tr>
+        <tr><td>변환 목적</td><td>판매수량이 0인 경우도 로그 변환할 수 있도록 하고, 큰 판매량 값의 영향을 완화</td></tr>
+        <tr><td>예측값 복원</td><td>모델의 로그 단위 예측값을 역변환하여 <b>원래 판매수량 단위로 복원</b></td></tr>
+      </tbody></table></div>,
+    },
+    {
+      id: 'parameters', heading: '파라미터',
+      body: <div className="sm-stat-detail-uniform">
+        <table className="mdl-table"><thead><tr><th>파라미터</th><th>의미</th><th>실제 적용</th></tr></thead><tbody>
+          <tr><td><code>p</code></td><td>비계절 자기회귀(AR) 차수</td><td><b>ARIMA 단계에서 상품별로 확정한 값 사용</b></td></tr>
+          <tr><td><code>d</code></td><td>비계절 차분 차수</td><td><b>ARIMA 단계에서 상품별로 확정한 값 사용</b></td></tr>
+          <tr><td><code>q</code></td><td>비계절 이동평균(MA) 차수</td><td><b>ARIMA 단계에서 상품별로 확정한 값 사용</b></td></tr>
+          <tr><td><code>P</code></td><td>계절 자기회귀 차수</td><td><code>{'{0, 1}'}</code> 탐색</td></tr>
+          <tr><td><code>D</code></td><td>계절 차분 차수</td><td><b>OCSB 검정으로 결정, 최대 1</b></td></tr>
+          <tr><td><code>Q</code></td><td>계절 이동평균 차수</td><td><code>{'{0, 1}'}</code> 탐색</td></tr>
+          <tr><td><code>m</code></td><td>계절주기</td><td><code>{'{13, 26, 52}'}</code>주 탐색</td></tr>
+          <tr><td>최종 구조</td><td><code>(p,d,q)(P,D,Q,m)</code></td><td>후보 중 <b>AICc가 가장 작은 구조 선택</b></td></tr>
+          <tr><td>52주 적용 조건</td><td><code>m=52</code> 탐색 여부</td><td><b>학습 이력이 104주 이상인 경우에만 후보에 포함</b></td></tr>
+          <tr><td>구조 선택 단위</td><td>파라미터 적용 범위</td><td><b>센터 × 상품별로 개별 선택</b></td></tr>
+        </tbody></table>
+        <div className="mdl-sub-hd">모델 적합 설정</div>
+        <table className="mdl-table"><thead><tr><th>설정</th><th>값</th><th>의미</th></tr></thead><tbody>
+          <tr><td><code>simple_differencing</code></td><td><code>True</code></td><td><code>d</code>, <code>D</code>에 따른 차분을 적용한 시계열을 사용해 모델 적합</td></tr>
+          <tr><td><code>enforce_stationarity</code></td><td><code>False</code></td><td>AR 파라미터에 정상성 조건을 강제로 제한하지 않음</td></tr>
+          <tr><td><code>enforce_invertibility</code></td><td><code>False</code></td><td>MA 파라미터에 가역성 조건을 강제로 제한하지 않음</td></tr>
+        </tbody></table>
+      </div>,
+    },
+    {
+      id: 'performance', heading: '성능',
+      body: <div className="sm-stat-detail-uniform"><table className="mdl-table mdl-performance-table"><thead><tr><th>예측 시점</th><th>WAPE</th><th>Bias</th><th>MAE</th><th>RMSE</th></tr></thead><tbody>
+        <tr><td><b>1주 후</b></td><td>101.18%</td><td>-32.55%</td><td>3.11</td><td>39.41</td></tr>
+        <tr><td><b>2주 후</b></td><td>95.74%</td><td>-40.78%</td><td>2.95</td><td>38.20</td></tr>
+        <tr><td><b>4주 후</b></td><td>101.04%</td><td>-36.57%</td><td>3.12</td><td>38.47</td></tr>
+      </tbody></table></div>,
+    },
+  ];
+  return <ModelDetailModal title="SARIMA" typeLabel="통계모델" statusBadge={{ tone: 'final', text: '최종 선정' }} sections={sections} onClose={onClose} />;
+}
+
+function DetailModal({ model, holdoutPerf, onClose }) {
+  const meta = MODEL_META[model];
+  const config = STAT_MODEL_DETAIL[model];
+  if (!meta || !config) return null;
+
+  const status = statStatus(model);
+  const { structure, variableGroups, preprocessing, paramRationale, actualParams, finalParams, selectionCriteria } = config;
+  const summary = modelUiSummary(model, meta);
+  const preprocessingRows = detailPreprocessing(preprocessing);
+  const parameterRows = detailParameters(model, config, summary);
+
+  const variableCount = variableGroups.reduce((sum, group) => sum + group.items.length, 0);
+  const variableTable = (group) => <table className="mdl-table"><thead><tr><th>컬럼명</th><th>컬럼 설명</th><th>활용 목적</th></tr></thead><tbody>{group.items.map((item) => <tr key={item.col}><td><code>{item.col}</code></td><td>{item.meaning}</td><td>{item.purpose}</td></tr>)}</tbody></table>;
+  const priorByParam = Object.fromEntries(paramRationale.priorResearch.rows.map((row) => [row.param, row.range]));
+  const officialByParam = Object.fromEntries(paramRationale.officialDocs.rows.map((row) => [row.param, row.range]));
+  const sections = [
+    {
+      id: 'overview', heading: '개요',
+      body: <div className="sm-stat-detail-uniform"><table className="mdl-table"><tbody>
+        <tr><th>모델</th><td>{meta.label}</td></tr>
+        <tr><th>설명</th><td>{summary.description}</td></tr>
+        <tr><th>모델 단위</th><td>센터 × 상품별 개별 모델</td></tr>
+        <tr><th>기본 구조</th><td>{summary.baseStructure}</td></tr>
+        {summary.exog.length > 0 && <tr><th>추가 외부변수</th><td><code>{summary.exog.join(' · ')}</code></td></tr>}
+        {summary.exog.length === 0 && <tr><th>외부변수</th><td>사용하지 않음</td></tr>}
+        <tr><th>예측 시점</th><td>1주 · 2주 · 4주 후</td></tr>
+      </tbody></table></div>,
+    },
+    {
+      id: 'variables', heading: '사용 변수',
+      body: <div className="sm-stat-detail-uniform"><table className="mdl-table"><thead><tr><th>컬럼명</th><th>컬럼 설명</th><th>모델에서의 역할</th></tr></thead><tbody>{variableGroups.flatMap((group) => group.items.map((item) => <tr key={`${group.group}-${item.col}`}><td><code>{item.col}</code></td><td>{item.col === 'qty_log1p' ? '주간 판매수량을 log(판매수량 + 1)로 변환한 값' : item.meaning}</td><td>{variableRole(item.col)}</td></tr>))}</tbody></table></div>,
+    },
+    {
+      id: 'preprocessing', heading: '전처리·예외처리',
+      body: <div className="sm-stat-detail-uniform">
+        <table className="mdl-table">
+          <thead><tr><th>대상</th><th>실제 처리</th><th>적용 이유</th></tr></thead>
+          <tbody>{preprocessingRows.map((p) => <tr key={`${p.target}-${p.method}`}><td>{p.target}</td><td>{p.method}</td><td>{p.reason}</td></tr>)}</tbody>
+        </table>
+      </div>,
+    },
+    {
+      id: 'parameters', heading: '파라미터',
+      body: <div className="sm-stat-detail-uniform">
+        <table className="mdl-table">
+          <thead><tr><th>파라미터</th><th>의미</th><th>실제 적용</th></tr></thead>
+          <tbody>{parameterRows.map((p) => <tr key={p[0]}><td><code>{p[0]}</code></td><td>{p[1]}</td><td>{p[2]}</td></tr>)}</tbody>
+        </table>
+      </div>,
+    },
+    {
+      id: 'performance', heading: '성능',
+      body: <div className="sm-stat-detail-uniform">
+        <table className="mdl-table mdl-performance-table">
+          <thead><tr><th>예측시점</th><th>WAPE(%)</th><th>Bias(%)</th><th>MAE</th><th>RMSE</th></tr></thead>
+          <tbody>{statPerfRows(holdoutPerf, model).map(({ horizon, entry }) => (
+            <tr key={horizon.value}>
+              <td>{horizon.label}</td>
+              {entry
+                ? <><td>{fmtDetailMetric(entry.wape)}</td><td>{fmtDetailMetric(entry.bias)}</td><td>{fmtDetailMetric(entry.mae)}</td><td>{fmtDetailMetric(entry.rmse)}</td></>
+                : <td colSpan={4} className="mdl-perf-unavailable">{holdoutPerf ? 'artifact에 없음' : '불러오는 중...'}</td>}
+            </tr>
+          ))}</tbody>
+        </table>
+        {EXCLUDED_MODELS.includes(model) && <div className="mdl-note">이 모델은 일부 SKU의 exog 계수 발산으로 지표가 극단값이 되어, 정상 비교 대상에서 제외되었습니다(값은 artifact 원본 그대로 표시).</div>}
+      </div>,
+    },
+  ];
+
+  return <ModelDetailModal title={meta.label} typeLabel={config.typeLabel} statusBadge={status} sections={sections} onClose={onClose} />;
 }

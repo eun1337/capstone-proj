@@ -46,3 +46,14 @@ def load_trials() -> pd.DataFrame:
 @lru_cache(maxsize=None)
 def load_parameter_summary() -> pd.DataFrame:
     return pd.read_csv(OUTPUTS_DIR / "model_parameter_summary.csv", keep_default_na=False)
+
+def representative_row(df: pd.DataFrame, model: str, horizon: int):
+    """(row, status) 반환. status는 'selected' 또는 'reference_only'.
+    selected=True 행이 있으면 그 행 + 'selected'.
+    없으면(=bias guardrail 통과 trial이 없는 경우) pooled_wape 최소 행("최저 WAPE 후보(참고)") + 'reference_only'.
+    이 규칙은 기존 /mldl/model-detail, /mldl/improvement가 이미 쓰던 것과 동일하다(새로 만든 규칙이 아님)."""
+    rows = df[(df["model"] == model) & (df["horizon"] == horizon)]
+    sel = rows[rows["selected"]]
+    if not sel.empty:
+        return sel.iloc[0], "selected"
+    return rows.loc[rows["pooled_wape"].idxmin()], "reference_only"

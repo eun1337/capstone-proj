@@ -1,7 +1,4 @@
 const BASE = '/api';
-// 백엔드가 캐시 미스로 무겁게 계산 중이어도(수 초~수십 초) 브라우저가 너무 일찍 연결을
-// 끊지 않도록 여유 있게 잡은 값 — 발표/데모 중 드물게 캐시 안 된 조합을 클릭해도
-// "Failed to fetch"로 보이지 않고 정상적으로 기다렸다가 응답을 받게 하기 위함이다.
 const REQUEST_TIMEOUT_MS = 25000;
 const RETRY_DELAY_MS = 1200;
 
@@ -19,7 +16,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// canRetry=false는 이미 한 번 재시도한 뒤의 재귀 호출에서만 쓰인다(무한 재시도 방지).
 async function request(path, options = {}, canRetry = true) {
   const token = localStorage.getItem('token');
   let res;
@@ -33,10 +29,6 @@ async function request(path, options = {}, canRetry = true) {
       },
     }, REQUEST_TIMEOUT_MS);
   } catch (e) {
-    // fetch() 자체가 던지는 실패(연결 끊김 "Failed to fetch", 타임아웃 AbortError)만
-    // 네트워크 레벨 문제로 보고 조용히 1회 재시도한다 — 서버가 정상적으로 응답한
-    // 4xx/5xx는 이 catch에 들어오지 않으므로(아래 res.ok 분기에서 별도 처리) 재시도하지
-    // 않는다(재시도해도 같은 에러가 그대로 반복될 뿐이다).
     if (canRetry) {
       await sleep(RETRY_DELAY_MS);
       return request(path, options, false);
@@ -130,13 +122,9 @@ export const api = {
     return request(`/dashboard/forecast-products${qs ? '?' + qs : ''}`);
   },
 
-  // 상품명만으로는 절대 합치지 않는 안전한 identity(상품명+규격+KAN_소분류)로 판별된
-  // "같은 상품의 다른 판매단위(EA/BX/CS)" SKU 목록.
   getProductOptions: ({ center, sku_id } = {}) =>
     request(`/dashboard/product-options${buildQuery({ center, sku_id })}`),
 
-  // 메인 "수요예측 추이" 차트의 집계(카테고리/센터 범위, SKU 미선택) 모드 전용 —
-  // weekly_demand/forecast_2024을 같은 단위 SKU들에 대해 그대로 합산만 한다.
   getDemandTrend: ({ center, option_code, category_large, category_middle, category_small, week_st, history_weeks } = {}) =>
     request(`/dashboard/demand-trend${buildQuery({ center, option_code, category_large, category_middle, category_small, week_st, history_weeks })}`),
 
@@ -160,7 +148,6 @@ export const api = {
     return request(`/dashboard/transactions${qs ? '?' + qs : ''}`);
   },
 
-  // ── 운영 인사이트 (/dashboard/insights/*) ──────────────────────
   getInsightCategorySales: ({ center, week_st, category_large, category_middle, category_small } = {}) =>
     request(`/dashboard/insights/category-sales${buildQuery({ center, week_st, category_large, category_middle, category_small })}`),
 
@@ -176,8 +163,6 @@ export const api = {
   getInsightReturns: ({ center, week_st, category_large, category_middle, category_small } = {}) =>
     request(`/dashboard/insights/returns${buildQuery({ center, week_st, category_large, category_middle, category_small })}`),
 
-  // ── 일간 운영 데이터 (/dashboard/daily/*) — 운영실적/재고·입출고 거래는 일간, AI 예측(h1/h2/h4)은
-  // 별도로 기존 주간 endpoint(getDashboardForecast/getForecastProducts)를 그대로 사용한다.
   getDailySummary: ({ center, date, category_large, category_middle, category_small, sku_id } = {}) =>
     request(`/dashboard/daily/summary${buildQuery({ center, date, category_large, category_middle, category_small, sku_id })}`),
 
@@ -193,8 +178,6 @@ export const api = {
   getDailyReturns: ({ center, date, category_large, category_middle, category_small } = {}) =>
     request(`/dashboard/daily/returns${buildQuery({ center, date, category_large, category_middle, category_small })}`),
 
-  // 대시보드 KPI modal(판매금액/순판매금액/판매 SKU 수/반품률) 4개가 공유하는 SKU별 당일
-  // 활동 목록 — 각 modal이 이 하나의 목록을 받아 자신에게 맞는 조건/정렬만 클라이언트에서 적용한다.
   getDailyProductActivity: ({ center, date, category_large, category_middle, category_small } = {}) =>
     request(`/dashboard/daily/product-activity${buildQuery({ center, date, category_large, category_middle, category_small })}`),
 
@@ -215,6 +198,14 @@ export const api = {
   getStatCenterCompare: ({ model } = {}) =>
     request(`/model-analysis/stat/center-compare${buildQuery({ model })}`),
 
+  getStatCommonHeatmap: ({ center, metric } = {}) =>
+    request(`/model-analysis/stat/common-heatmap${buildQuery({ center, metric })}`),
+
+  getStatCommonWapeBias: ({ center, horizon } = {}) =>
+    request(`/model-analysis/stat/common-wape-bias${buildQuery({ center, horizon })}`),
+
+  getStatCoverage: () => request('/model-analysis/stat/coverage'),
+
   getMlDlTrials: ({ horizon, model, trial_filter } = {}) =>
     request(`/model-analysis/mldl/trials${buildQuery({ horizon, model, trial_filter })}`),
 
@@ -230,6 +221,10 @@ export const api = {
 
   getMlDlModelDetail: ({ model, horizon } = {}) =>
     request(`/model-analysis/mldl/model-detail${buildQuery({ model, horizon })}`),
+
+  getMlDlModelSummary: () => request('/model-analysis/mldl/model-summary'),
+
+  getMlDlImprovementExperiments: () => request('/model-analysis/mldl/improvement-experiments'),
 
   getFinalBar: ({ center, horizon, metric, scope } = {}) =>
     request(`/model-analysis/final/bar${buildQuery({ center, horizon, metric, scope })}`),
@@ -274,4 +269,16 @@ export const api = {
 
   getQaParameterSummary: ({ models } = {}) =>
     request(`/model-analysis/qa/parameter-summary${buildQuery({ models })}`),
+
+  getQaProductSearch: ({ q, limit } = {}) =>
+    request(`/model-analysis/qa/products/search${buildQuery({ q, limit })}`),
+
+  getQaProductInfo: ({ sku_id, center } = {}) =>
+    request(`/model-analysis/qa/product-info${buildQuery({ sku_id, center })}`),
+
+  getQaSkuTimeseries: ({ sku_id, center, horizon, weeks } = {}) =>
+    request(`/model-analysis/qa/sku-timeseries${buildQuery({ sku_id, center, horizon, weeks })}`),
+
+  getQaRepresentativeCases: ({ horizon } = {}) =>
+    request(`/model-analysis/qa/representative-cases${buildQuery({ horizon })}`),
 };

@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { IconAward, IconBarChart, IconHome, IconLayers, IconMessage } from './icons.jsx';
+import { IconAward, IconBarChart, IconHome, IconLayers } from './icons.jsx';
 import '../Dashboard.css';
 import './AnalysisLayout.css';
 
@@ -14,7 +14,6 @@ const NAV_ITEMS = [
   { to: 'stat', Icon: IconBarChart, label: '02 통계모델 분석' },
   { to: 'ml-dl', Icon: IconLayers, label: '03 ML/DL 분석' },
   { to: 'comparison', Icon: IconAward, label: '04 최종 모델 비교' },
-  { to: 'detail', Icon: IconMessage, label: '05 상세 분석 / Q&A' },
 ];
 
 export default function AnalysisLayout() {

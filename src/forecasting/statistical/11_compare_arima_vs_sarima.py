@@ -43,7 +43,7 @@ import pandas as pd
 BASE_DIR = Path(__file__).resolve().parents[3]
 DATA_DIR = BASE_DIR / "data"
 
-ARIMA_HOLDOUT_PATH = DATA_DIR / "ml" / "day2_statistical_models" / "arima" / "arima_holdout_2024.parquet"
+ARIMA_HOLDOUT_PATH = DATA_DIR / "ml" / "day2_statistical_models" / "arima_holdout_2024.parquet"
 SARIMA_PANEL_PATH = DATA_DIR / "ml" / "day2_statistical_models" / "sarima_sarimax_sku" / "sarima_eval_common_panel.parquet"
 DEV_PATH = DATA_DIR / "development_2021_2023.parquet"
 
@@ -135,8 +135,6 @@ def main() -> None:
         ARIMA_HOLDOUT_PATH,
         columns=[*KEY_COLS, "prediction", "actual"],
     ).rename(columns={"prediction": "arima_prediction", "actual": "arima_actual"})
-    # ARIMA holdout의 horizon은 "h1"/"h2"/"h4" 문자열(SARIMA/SARIMAX는 1/2/4 정수) — key
-    # merge를 위해 형식만 정수로 맞춘다(값 자체는 그대로, 매핑 오류 방지용 명시적 검증 포함).
     _horizon_map = {"h1": 1, "h2": 2, "h4": 4}
     unknown_horizons = set(arima["horizon"].unique()) - set(_horizon_map)
     assert not unknown_horizons, f"예상 밖 ARIMA horizon 값: {unknown_horizons}"
@@ -209,15 +207,16 @@ def main() -> None:
                     (arima_m["WAPE"] - sx_m["WAPE"]) * 100
                     if pd.notna(arima_m["WAPE"]) and pd.notna(sx_m["WAPE"]) else np.nan
                 )
+                n_sku = int(sub[[CENTER_COL, SKU_COL]].drop_duplicates().shape[0])
                 metric_rows_all.append({
                     "horizon": h, "center_id": center, "model": "ARIMA", "compared_against": model_label,
-                    "n": arima_m["n"], "WAPE": arima_m["WAPE"], "Bias": arima_m["Bias"], "RMSE": arima_m["RMSE"],
+                    "n": arima_m["n"], "n_sku": n_sku, "WAPE": arima_m["WAPE"], "Bias": arima_m["Bias"], "RMSE": arima_m["RMSE"],
                     "MAE": arima_m["MAE"], "MASE": arima_m["MASE"], "n_mase": arima_m["n_mase"],
                     "wape_improvement_pp_arima_to_model": wape_improve_pp,
                 })
                 metric_rows_all.append({
                     "horizon": h, "center_id": center, "model": model_label, "compared_against": model_label,
-                    "n": sx_m["n"], "WAPE": sx_m["WAPE"], "Bias": sx_m["Bias"], "RMSE": sx_m["RMSE"],
+                    "n": sx_m["n"], "n_sku": n_sku, "WAPE": sx_m["WAPE"], "Bias": sx_m["Bias"], "RMSE": sx_m["RMSE"],
                     "MAE": sx_m["MAE"], "MASE": sx_m["MASE"], "n_mase": sx_m["n_mase"],
                     "wape_improvement_pp_arima_to_model": wape_improve_pp,
                 })
@@ -228,7 +227,7 @@ def main() -> None:
     pd.concat([audit_long, note_row], ignore_index=True).to_csv(OUT_AUDIT, index=False, encoding="utf-8-sig")
 
     metrics_df = pd.DataFrame(metric_rows_all)[
-        ["horizon", "center_id", "model", "compared_against", "n", "WAPE", "Bias", "RMSE", "MAE", "MASE", "n_mase",
+        ["horizon", "center_id", "model", "compared_against", "n", "n_sku", "WAPE", "Bias", "RMSE", "MAE", "MASE", "n_mase",
          "wape_improvement_pp_arima_to_model"]
     ]
     metrics_df.to_csv(OUT_METRICS, index=False, encoding="utf-8-sig")

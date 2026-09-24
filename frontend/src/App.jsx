@@ -6,7 +6,6 @@ import Overview from './pages/analysis/Overview.jsx';
 import StatModelAnalysis from './pages/analysis/StatModelAnalysis.jsx';
 import MlDlAnalysis from './pages/analysis/MlDlAnalysis.jsx';
 import ModelComparison from './pages/analysis/ModelComparison.jsx';
-import DetailQnA from './pages/analysis/DetailQnA.jsx';
 
 function PrivateRoute({ children }) {
   const token = localStorage.getItem('token');
@@ -39,7 +38,6 @@ export default function App() {
           <Route path="stat" element={<StatModelAnalysis />} />
           <Route path="ml-dl" element={<MlDlAnalysis />} />
           <Route path="comparison" element={<ModelComparison />} />
-          <Route path="detail" element={<DetailQnA />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
