@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-OUTPUTS_DIR = Path(__file__).resolve().parents[3] / "outputs" / "model_comparison"
+OUTPUTS_DIR = Path(__file__).resolve().parents[3] / "data" / "model_analysis" / "model_comparison"
 
 MODEL_LABELS = {
     "RF": "RF",

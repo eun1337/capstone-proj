@@ -1,4 +1,4 @@
-"""2023 P13 HPO 원본 결과 JSON(outputs/hpo/*, outputs/hurdle_hpo/*)에서
+"""2023 P13 HPO 원본 결과 JSON(data/model_analysis/hpo/*, data/model_analysis/hurdle_hpo/*)에서
 trial_id 기준으로 pooled_mae/pooled_rmse만 조회한다. ml_dl_model_selection_2023.csv에는
 mae/rmse 컬럼이 없어서 만든 보조 조회기이며, 절대 값을 계산·추정하지 않고
 원본 JSON에 실제로 존재하는 값만 반환한다(trial_id 불일치 또는 pooled_wape 불일치 시 미제공)."""
@@ -7,16 +7,16 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "model_analysis"
 
 _FAMILY_FILES = {
-    "RF":              ("outputs/hpo/rf/p13_rf_h{h}.json", "all_trials"),
-    "LightGBM":        ("outputs/hpo/lgbm/p13_lightgbm_h{h}.json", "all_trials"),
-    "LSTM":            ("outputs/hpo/lstm/p13_lstm_h{h}.json", "all_trials"),
-    "TFT":             ("outputs/hpo/tft/p13_tft_h{h}.json", "all_trials"),
-    "Informer":        ("outputs/hpo/informer/p13_informer_h{h}.json", "all_trials"),
-    "Hurdle-RF":       ("outputs/hurdle_hpo/rf_hurdle/p13_hurdle_rf_h{h}.json", "all_combinations"),
-    "Hurdle-LightGBM": ("outputs/hurdle_hpo/lgbm_hurdle/p13_hurdle_lightgbm_h{h}.json", "all_trials"),
+    "RF":              ("hpo/rf/p13_rf_h{h}.json", "all_trials"),
+    "LightGBM":        ("hpo/lgbm/p13_lightgbm_h{h}.json", "all_trials"),
+    "LSTM":            ("hpo/lstm/p13_lstm_h{h}.json", "all_trials"),
+    "TFT":             ("hpo/tft/p13_tft_h{h}.json", "all_trials"),
+    "Informer":        ("hpo/informer/p13_informer_h{h}.json", "all_trials"),
+    "Hurdle-RF":       ("hurdle_hpo/rf_hurdle/p13_hurdle_rf_h{h}.json", "all_combinations"),
+    "Hurdle-LightGBM": ("hurdle_hpo/lgbm_hurdle/p13_hurdle_lightgbm_h{h}.json", "all_trials"),
 }
 
 _WAPE_TOLERANCE = 0.01
@@ -29,7 +29,7 @@ def _load_trial_index(model: str, horizon: int) -> dict[int, dict]:
     if entry is None:
         return {}
     path_tpl, list_key = entry
-    path = REPO_ROOT / path_tpl.format(h=horizon)
+    path = DATA_DIR / path_tpl.format(h=horizon)
     if not path.exists():
         return {}
     try:

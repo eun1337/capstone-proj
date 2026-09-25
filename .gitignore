@@ -29,3 +29,4 @@ frontend/.vite/
 outputs/final_retrain/lightgbm_hurdle/*.joblib
 p13_results_all.txt
 *.pem
+frontend/dist/

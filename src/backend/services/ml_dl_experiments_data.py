@@ -10,11 +10,11 @@ import json
 from functools import lru_cache
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "model_analysis"
 
 
 def _load(rel_path: str) -> dict | None:
-    path = REPO_ROOT / rel_path
+    path = DATA_DIR / rel_path
     if not path.exists():
         return None
     try:
@@ -33,12 +33,12 @@ def _trial(data: dict, list_key: str, trial_id: int) -> dict | None:
 @lru_cache(maxsize=None)
 def load_experiment_entries() -> list[dict]:
     """LightGBM h1, 동일 평가모집단(577319행) 내에서 target-transform/Hurdle/Tweedie 대안을
-    비교한 5개 variant. 전부 outputs/hpo, outputs/diagnostics 원본 값 그대로."""
-    official = _load("outputs/hpo/lgbm/p13_lightgbm_h1.json")
-    rawscale = _load("outputs/hpo/_diag_rawscale_lightgbm_h1/p13_lightgbm_h1_rawscale.json")
-    hurdle_diag = _load("outputs/diagnostics/target_transform_bias/lightgbm_h1_hurdle_diagnostic.json")
-    target_scale = _load("outputs/diagnostics/target_transform_bias/lightgbm_h1_hurdle_target_scale_diagnostic.json")
-    tweedie = _load("outputs/diagnostics/target_transform_bias/lightgbm_h1_hurdle_tweedie_diagnostic.json")
+    비교한 5개 variant. 전부 data/model_analysis/hpo, data/model_analysis/diagnostics 원본 값 그대로."""
+    official = _load("hpo/lgbm/p13_lightgbm_h1.json")
+    rawscale = _load("hpo/_diag_rawscale_lightgbm_h1/p13_lightgbm_h1_rawscale.json")
+    hurdle_diag = _load("diagnostics/target_transform_bias/lightgbm_h1_hurdle_diagnostic.json")
+    target_scale = _load("diagnostics/target_transform_bias/lightgbm_h1_hurdle_target_scale_diagnostic.json")
+    tweedie = _load("diagnostics/target_transform_bias/lightgbm_h1_hurdle_tweedie_diagnostic.json")
 
     variants = []
 
@@ -101,11 +101,11 @@ def load_experiment_entries() -> list[dict]:
             "Tweedie 단일모델은 이 조합보다 WAPE가 전부 높아 제외."
         ),
         "source_paths": [
-            "outputs/hpo/lgbm/p13_lightgbm_h1.json",
-            "outputs/hpo/_diag_rawscale_lightgbm_h1/p13_lightgbm_h1_rawscale.json",
-            "outputs/diagnostics/target_transform_bias/lightgbm_h1_hurdle_diagnostic.json",
-            "outputs/diagnostics/target_transform_bias/lightgbm_h1_hurdle_target_scale_diagnostic.json",
-            "outputs/diagnostics/target_transform_bias/lightgbm_h1_hurdle_tweedie_diagnostic.json",
+            "hpo/lgbm/p13_lightgbm_h1.json",
+            "hpo/_diag_rawscale_lightgbm_h1/p13_lightgbm_h1_rawscale.json",
+            "diagnostics/target_transform_bias/lightgbm_h1_hurdle_diagnostic.json",
+            "diagnostics/target_transform_bias/lightgbm_h1_hurdle_target_scale_diagnostic.json",
+            "diagnostics/target_transform_bias/lightgbm_h1_hurdle_tweedie_diagnostic.json",
         ],
     }]
 
@@ -114,7 +114,7 @@ def load_experiment_entries() -> list[dict]:
 def load_narrative_notes() -> list[dict]:
     notes = []
 
-    lstm_raw = _load("outputs/hpo/_diag_rawscale_lstm_h1/p13_lstm_h1_rawscale.json")
+    lstm_raw = _load("hpo/_diag_rawscale_lstm_h1/p13_lstm_h1_rawscale.json")
     if lstm_raw:
         trials = lstm_raw.get("all_trials") or []
         if trials:
@@ -130,11 +130,11 @@ def load_narrative_notes() -> list[dict]:
                     f"raw-scale은 전 모델 공통 해법으로 부적합하다고 판단해 제외함(모델·HP grid가 달라 "
                     f"LightGBM 비교표와는 별도로 기록)."
                 ),
-                "source_paths": ["outputs/hpo/_diag_rawscale_lstm_h1/p13_lstm_h1_rawscale.json"],
+                "source_paths": ["hpo/_diag_rawscale_lstm_h1/p13_lstm_h1_rawscale.json"],
             })
 
-    single_b = _load("outputs/hurdle_hpo/lgbm_hurdle/b_center/single_lightgbm_h1.json")
-    hurdle_b = _load("outputs/hurdle_hpo/lgbm_hurdle/b_center/hurdle_lightgbm_h1.json")
+    single_b = _load("hurdle_hpo/lgbm_hurdle/b_center/single_lightgbm_h1.json")
+    hurdle_b = _load("hurdle_hpo/lgbm_hurdle/b_center/hurdle_lightgbm_h1.json")
     if single_b and hurdle_b:
         sp, hp = single_b["pooled_metrics"], hurdle_b["pooled_metrics"]
         notes.append({
@@ -147,12 +147,12 @@ def load_narrative_notes() -> list[dict]:
                 f"WAPE는 소폭 악화되지만 Bias는 크게 개선됨 — 모델 재선정에는 쓰이지 않은 참고 체크."
             ),
             "source_paths": [
-                "outputs/hurdle_hpo/lgbm_hurdle/b_center/single_lightgbm_h1.json",
-                "outputs/hurdle_hpo/lgbm_hurdle/b_center/hurdle_lightgbm_h1.json",
+                "hurdle_hpo/lgbm_hurdle/b_center/single_lightgbm_h1.json",
+                "hurdle_hpo/lgbm_hurdle/b_center/hurdle_lightgbm_h1.json",
             ],
         })
 
-    seed = _load("outputs/hurdle_hpo/lgbm_hurdle/robustness/seed_stability.json")
+    seed = _load("hurdle_hpo/lgbm_hurdle/robustness/seed_stability.json")
     if seed:
         parts = []
         for h in ("1", "2", "4"):
@@ -171,7 +171,7 @@ def load_narrative_notes() -> list[dict]:
                     + ", ".join(parts)
                     + ". 일부 horizon은 seed에 따라 Bias 가드레일 통과 여부가 달라질 수 있음을 있는 그대로 기록."
                 ),
-                "source_paths": ["outputs/hurdle_hpo/lgbm_hurdle/robustness/seed_stability.json"],
+                "source_paths": ["hurdle_hpo/lgbm_hurdle/robustness/seed_stability.json"],
             })
 
     return notes

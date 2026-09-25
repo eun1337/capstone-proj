@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import EChart from '../../components/charts/EChart.jsx';
-import dashboard from '../../../../data/dashboard/final_model_comparison/final_model_summary.json';
+import dashboard from '../../../../data/model_analysis/final_model_comparison/final_model_summary.json';
 import './analysis.css';
 import './ModelComparison.css';
 

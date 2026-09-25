@@ -184,19 +184,8 @@ export const api = {
   getDailyTransactions: ({ center, sku_id, date, history_days } = {}) =>
     request(`/dashboard/daily/transactions${buildQuery({ center, sku_id, date, history_days })}`),
 
-  getStatModels: () => request('/model-analysis/stat/models'),
-
   getStatHeatmap: ({ center, metric } = {}) =>
     request(`/model-analysis/stat/heatmap${buildQuery({ center, metric })}`),
-
-  getStatHorizonProfile: ({ center, metric, include_extreme } = {}) =>
-    request(`/model-analysis/stat/horizon-profile${buildQuery({ center, metric, include_extreme })}`),
-
-  getStatWapeBias: ({ center, horizon, include_extreme } = {}) =>
-    request(`/model-analysis/stat/wape-bias${buildQuery({ center, horizon, include_extreme })}`),
-
-  getStatCenterCompare: ({ model } = {}) =>
-    request(`/model-analysis/stat/center-compare${buildQuery({ model })}`),
 
   getStatCommonHeatmap: ({ center, metric } = {}) =>
     request(`/model-analysis/stat/common-heatmap${buildQuery({ center, metric })}`),
@@ -206,19 +195,6 @@ export const api = {
 
   getStatCoverage: () => request('/model-analysis/stat/coverage'),
 
-  getMlDlTrials: ({ horizon, model, trial_filter } = {}) =>
-    request(`/model-analysis/mldl/trials${buildQuery({ horizon, model, trial_filter })}`),
-
-  getMlDlBiasBoxplot: ({ horizon } = {}) =>
-    request(`/model-analysis/mldl/bias-boxplot${buildQuery({ horizon })}`),
-
-  getMlDlPassRate: ({ horizon } = {}) =>
-    request(`/model-analysis/mldl/pass-rate${buildQuery({ horizon })}`),
-
-  getMlDlImprovement: () => request('/model-analysis/mldl/improvement'),
-
-  getMlDlHurdleCompare: () => request('/model-analysis/mldl/hurdle-compare'),
-
   getMlDlModelDetail: ({ model, horizon } = {}) =>
     request(`/model-analysis/mldl/model-detail${buildQuery({ model, horizon })}`),
 
@@ -226,59 +202,9 @@ export const api = {
 
   getMlDlImprovementExperiments: () => request('/model-analysis/mldl/improvement-experiments'),
 
-  getFinalBar: ({ center, horizon, metric, scope } = {}) =>
-    request(`/model-analysis/final/bar${buildQuery({ center, horizon, metric, scope })}`),
-
   getFinalKpi: ({ center, horizon, metric, scope } = {}) =>
     request(`/model-analysis/final/kpi${buildQuery({ center, horizon, metric, scope })}`),
 
-  getFinalHeatmap: ({ metric, scope } = {}) =>
-    request(`/model-analysis/final/heatmap${buildQuery({ metric, scope })}`),
-
-  getFinalWinnerShare: ({ center, horizon } = {}) =>
-    request(`/model-analysis/final/winner-share${buildQuery({ center, horizon })}`),
-
-  getFinalWapeProfile: ({ center, horizon } = {}) =>
-    request(`/model-analysis/final/wape-profile${buildQuery({ center, horizon })}`),
-
-  getFinalDemandShare: ({ center, horizon } = {}) =>
-    request(`/model-analysis/final/demand-share${buildQuery({ center, horizon })}`),
-
-  getFinalDemandDetail: ({ center, horizon, quartile } = {}) =>
-    request(`/model-analysis/final/demand-detail${buildQuery({ center, horizon, quartile })}`),
-
-  getQaWeeks: () => request('/model-analysis/qa/weeks'),
-
-  getQaSkuScatter: ({ center, horizon, sku_search } = {}) =>
-    request(`/model-analysis/qa/sku-scatter${buildQuery({ center, horizon, sku_search })}`),
-
-  getQaSkuDetail: ({ sku_id, center, horizon } = {}) =>
-    request(`/model-analysis/qa/sku-detail${buildQuery({ sku_id, center, horizon })}`),
-
-  getQaSkuWeekly: ({ sku_id, center, horizon } = {}) =>
-    request(`/model-analysis/qa/sku-weekly${buildQuery({ sku_id, center, horizon })}`),
-
-  getQaWeeklyError: ({ center, horizon } = {}) =>
-    request(`/model-analysis/qa/weekly-error${buildQuery({ center, horizon })}`),
-
-  getQaCoverage: ({ center, horizon, sku_id, sku_center } = {}) =>
-    request(`/model-analysis/qa/coverage${buildQuery({ center, horizon, sku_id, sku_center })}`),
-
   getQaStatVariableEffect: ({ center, horizon } = {}) =>
     request(`/model-analysis/qa/stat-variable-effect${buildQuery({ center, horizon })}`),
-
-  getQaParameterSummary: ({ models } = {}) =>
-    request(`/model-analysis/qa/parameter-summary${buildQuery({ models })}`),
-
-  getQaProductSearch: ({ q, limit } = {}) =>
-    request(`/model-analysis/qa/products/search${buildQuery({ q, limit })}`),
-
-  getQaProductInfo: ({ sku_id, center } = {}) =>
-    request(`/model-analysis/qa/product-info${buildQuery({ sku_id, center })}`),
-
-  getQaSkuTimeseries: ({ sku_id, center, horizon, weeks } = {}) =>
-    request(`/model-analysis/qa/sku-timeseries${buildQuery({ sku_id, center, horizon, weeks })}`),
-
-  getQaRepresentativeCases: ({ horizon } = {}) =>
-    request(`/model-analysis/qa/representative-cases${buildQuery({ horizon })}`),
 };
