@@ -31,8 +31,14 @@
 
 .az-nav-icon { width: 16px; height: 16px; flex-shrink: 0; }
 
-/* 분석 화면(01~04)은 창 높이에 맞춰 한 화면에 채우되, 창이 낮아지면 카드가 찌그러지지 않도록
-   최소 높이를 두고 세로 스크롤로 전환한다. 760px ≈ 창 높이 850px일 때의 콘텐츠 영역 높이
-   (각 페이지 CSS의 max-height: 850px 압축 스타일 기준점). */
-.main-body > .content-area:has(> .ov-page, > .sm-page, > .md-page, > .fc-page) { overflow-y: auto; }
-.content-area > :is(.ov-page, .sm-page, .md-page, .fc-page) { flex-shrink: 0; min-height: 760px; }
+/* 분석 화면(01~04)은 창 크기에 맞춰 한 화면에 채우되, 창이 작아지면 카드가 찌그러지지 않도록
+   최소 크기를 두고 콘텐츠 영역에만 스크롤을 낸다(상단 GNB·좌측 사이드바는 고정).
+   - 높이 760px ≈ 창 높이 850px일 때의 콘텐츠 영역 높이(각 페이지 CSS의 max-height: 850px 압축 스타일 기준점)
+   - 너비 1300px: 3열 카드의 제목·차트 라벨이 줄바꿈/겹침 없이 표시되는 너비 */
+.main-body > .content-area:has(> .ov-page, > .sm-page, > .md-page, > .fc-page) { overflow: auto; }
+.content-area > :is(.ov-page, .sm-page, .md-page, .fc-page) { flex-shrink: 0; min-height: 760px; min-width: 1300px; }
+
+/* 04 화면의 좁은 창용 2열·1열 전환(ModelComparison.css의 max-width 미디어쿼리)은 최소 너비와
+   충돌하므로 무효화하고 다른 화면과 같은 3열×2행을 유지한다. */
+.content-area > .fc-page { flex: 1 0 0%; }
+.content-area > .fc-page .fc-grid { grid-template-columns: repeat(3,minmax(0,1fr)); grid-template-rows: repeat(2,minmax(0,1fr)); grid-auto-rows: auto; }
