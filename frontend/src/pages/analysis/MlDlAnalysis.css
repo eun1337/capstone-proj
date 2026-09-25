@@ -244,8 +244,36 @@
   word-break: keep-all;
 }
 .md-summary-performance strong { color: #1e3a8a; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.md-main-model-summary { width: 100%; display: grid; grid-template-rows: repeat(2,minmax(36px,auto)); padding: 0 8px; border-radius: 7px; background: #eff6ff; }
+.md-main-model-summary > div { display: grid; grid-template-columns: 58px minmax(0,1fr); align-items: center; gap: 8px; padding: 6px 0; }
+.md-main-model-summary > div + div { border-top: 1px solid #dbeafe; }
+.md-main-model-summary span { color: #64748b; font-size: 10.5px; font-weight: 700; }
+.md-main-model-summary strong { color: #1e3a8a; font-size: 10.5px; font-weight: 700; line-height: 1.35; word-break: keep-all; }
 .md-clickable-summary .md-detail-caption,
 .md-clickable-summary .md-final-process { text-align: left; }
+.md-clickable-summary .md-detail-caption { margin: 0; color: #475569; font-size: 11px; font-weight: 600; }
+.md-clickable-summary .md-final-process {
+  display: grid;
+  grid-template-columns: 58px minmax(0,1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: #eff6ff;
+  color: #334155;
+  font-size: 10.5px;
+}
+.md-clickable-summary .md-final-process span { color: #64748b; font-weight: 700; }
+.md-clickable-summary .md-final-process strong { color: #1e3a8a; font-size: 11px; line-height: 1.4; word-break: keep-all; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.md-bias-pass-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 6px 8px; border-radius: 7px; font-size: 10.5px; }
+.md-bias-pass-summary span { color: #64748b; font-weight: 650; }
+.md-bias-pass-summary strong { font-size: 11px; }
+.md-bias-pass-summary.is-pass { background: #ecfdf5; }
+.md-bias-pass-summary.is-pass strong { color: #047857; }
+.md-bias-pass-summary.is-fail { background: #fef2f2; }
+.md-bias-pass-summary.is-fail strong { color: #b91c1c; }
 
 .md-final-kpi-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px; }
 .md-final-kpi { padding: 6px 7px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; display: flex; flex-direction: column; gap: 2px; }

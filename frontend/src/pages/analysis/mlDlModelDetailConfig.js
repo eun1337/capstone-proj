@@ -34,44 +34,131 @@ function col(name) {
 }
 function cols(names) { return names.map(col); }
 
-function holidayCols(horizon) {
-  const h = horizon || 'h1';
+export function getMlDlColumnDescription(name) {
+  if (COLUMN_INFO[name]) return COLUMN_INFO[name].split(' — ')[0];
+  if (name.includes('공휴일_W0')) return '각 예측시점의 대상 주 공휴일 포함 여부';
+  if (name.includes('공휴일_W-1')) return '각 예측시점 대상 주의 1주 전 공휴일 여부';
+  if (name.includes('공휴일_W+1')) return '각 예측시점 대상 주의 1주 후 공휴일 여부';
+  if (name.includes('→ target_log1p')) return '예측시점별 목표 판매수량을 log1p로 변환한 학습값';
+  const targetMatch = name.match(/^target_h([124])$/);
+  if (targetMatch) return `${targetMatch[1]}주 후 목표 판매수량`;
+  return '모델 학습에 적용되는 입력 컬럼';
+}
+
+function holidayCols() {
   return [
-    { col: `target_${h}_공휴일_W0`, meaning: '예측 대상 주 자체에 공휴일(설·추석) 포함', purpose: '명절이 있는 주의 수요 변화 반영' },
-    { col: `target_${h}_공휴일_W-1`, meaning: '예측 대상 주의 1주 전이 공휴일 주', purpose: '명절 다음 주의 수요 변화 반영' },
-    { col: `target_${h}_공휴일_W+1`, meaning: '예측 대상 주의 1주 후가 공휴일 주', purpose: '명절 이전 주의 수요 변화 반영' },
+    { col: 'target_h1/h2/h4_공휴일_W0', meaning: '각 예측시점의 대상 주에 공휴일(설·추석) 포함', purpose: '명절이 있는 주의 수요 변화 반영' },
+    { col: 'target_h1/h2/h4_공휴일_W-1', meaning: '각 예측시점 대상 주의 1주 전이 공휴일 주', purpose: '명절 다음 주의 수요 변화 반영' },
+    { col: 'target_h1/h2/h4_공휴일_W+1', meaning: '각 예측시점 대상 주의 1주 후가 공휴일 주', purpose: '명절 이전 주의 수요 변화 반영' },
   ];
 }
 
-// ML/Hurdle 공용 — get_model_feature_cols(horizon) 실제 반환 30개 컬럼을 5개 변수군으로 재분류.
-function mlVariableGroups(horizon) {
+// ML/Hurdle 공용 — get_model_feature_cols(horizon) 실제 반환 30개 컬럼을 5개 변수군으로 재분류(호라이즌 무관 동일 30개).
+function mlVariableGroups() {
   return [
     { group: '상품 · 분류', items: cols(['KAN_대분류', 'KAN_중분류', 'KAN_소분류', '입수']) },
     { group: '수요 이력', items: cols(['qty_log1p', 'qty_lag1_filled_log1p', 'qty_rollmean_4_filled_log1p', 'qty_rollstd_4_filled_log1p', 'adi_expanding_filled', 'cv2_expanding_filled', 'weeks_since_last_active_filled']) },
-    { group: '시간 · 공휴일', items: [...cols(['ISO_주차', '월', '분기']), ...holidayCols(horizon)] },
+    { group: '시간 · 공휴일', items: [...cols(['ISO_주차', '월', '분기']), ...holidayCols()] },
     { group: '외부환경', items: cols(['평균온도', '총강수량', '강수량_호우_count', 'covid_flag', 'ccsi_lag_m1', 'cpi_y1_prev', 'cpi_y2_prev_yoy']) },
     { group: '운영 · 구조', items: cols(['existed_before_regime', 'is_warmup', 'coldstart_flag', 'center_is_B', 'temp_x_precip', 'center_temp_inter']) },
   ];
 }
 
-// DL 공용 — get_model_feature_roles(horizon) 실제 역할 구분(27개: lag/rolling 요약 대신 원시 시퀀스 사용).
-function dlVariableGroups(horizon) {
+// DL 공용 — 실제 사용 변수 27개를 업무 의미 기준으로 분류.
+function dlVariableGroups() {
   return [
-    { group: '정적 범주형 (static categorical)', items: cols(['KAN_대분류', 'KAN_중분류', 'KAN_소분류']) },
-    { group: '정적 연속형 (static continuous)', items: cols(['입수', 'existed_before_regime', 'center_is_B']) },
-    { group: '미래에 미리 알 수 있는 변수 (time-varying known)', items: [...cols(['ISO_주차', '월', '분기', 'covid_flag']), ...holidayCols(horizon)] },
-    { group: '과거 관측 변수 (time-varying observed)', items: cols(['평균온도', '총강수량', 'qty_log1p', 'is_warmup', 'coldstart_flag', 'adi_expanding_filled', 'cv2_expanding_filled', '강수량_호우_count', 'temp_x_precip', 'center_temp_inter', 'weeks_since_last_active_filled', 'ccsi_lag_m1', 'cpi_y1_prev', 'cpi_y2_prev_yoy']) },
+    { group: '상품 · 분류', items: cols(['KAN_대분류', 'KAN_중분류', 'KAN_소분류', '입수']) },
+    { group: '수요 이력', items: cols(['qty_log1p', 'adi_expanding_filled', 'cv2_expanding_filled', 'weeks_since_last_active_filled']) },
+    { group: '시간 · 공휴일', items: [...cols(['ISO_주차', '월', '분기']), ...holidayCols()] },
+    { group: '외부환경', items: cols(['평균온도', '총강수량', '강수량_호우_count', 'covid_flag', 'ccsi_lag_m1', 'cpi_y1_prev', 'cpi_y2_prev_yoy']) },
+    { group: '운영 · 구조', items: cols(['existed_before_regime', 'is_warmup', 'coldstart_flag', 'center_is_B', 'temp_x_precip', 'center_temp_inter']) },
   ];
 }
 
 const ML_TREE_PREPROCESSING_COMMON = [
-  { target: 'target(qty)', method: 'log1p 변환 후 학습, 예측 후 expm1 + 0 클리핑으로 역변환', reason: '수요 분포 왜도 감소·음수 예측 방지 (RF/LightGBM 공통)' },
+  { target: '학습 목표 변환', columns: 'target_h1 · target_h2 · target_h4', method: '선택한 예측시점의 목표 판매수량에 1을 더해 로그 변환하고, 예측 후 expm1으로 원래 단위로 복원한 뒤 음수는 0으로 보정', reason: '큰 판매량의 영향을 완화하고 음수 예측을 방지' },
 ];
+
+const DL_TIME_VARYING_STANDARDIZED_COLUMNS = [
+  'ISO_주차', '월', '분기', 'covid_flag',
+  'target_h1/h2/h4_공휴일_W0', 'target_h1/h2/h4_공휴일_W-1', 'target_h1/h2/h4_공휴일_W+1',
+  '평균온도', '총강수량', 'qty_log1p', 'is_warmup', 'coldstart_flag',
+  'adi_expanding_filled', 'cv2_expanding_filled', '강수량_호우_count', 'temp_x_precip',
+  'center_temp_inter', 'weeks_since_last_active_filled', 'ccsi_lag_m1', 'cpi_y1_prev', 'cpi_y2_prev_yoy',
+];
+const DL_STATIC_STANDARDIZED_COLUMNS = ['입수', 'existed_before_regime', 'center_is_B'];
+
+const RF_PARAMETER_ROWS = [
+  { param: 'max_features', meaning: '분할 시 고려할 변수 비율', evidence: '선행연구 후보에 0.1, 1/3 포함', search: '{0.1, 1/3}' },
+  { param: 'min_samples_leaf', meaning: 'leaf의 최소 표본 수', evidence: '선행연구 후보에 100, 500 포함', search: '{100, 500}' },
+];
+const LGBM_PARAMETER_ROWS = [
+  { param: 'num_leaves', meaning: '트리 복잡도', evidence: '선행연구 8~1024 · 공식 기본값 31', search: '{8, 31}' },
+  { param: 'min_child_samples', meaning: 'leaf의 최소 표본 수', evidence: '선행연구 5~5000', search: '{100, 1000}' },
+];
+const PARAMETER_UI = {
+  RF: {
+    references: [{ type: '참고 근거', author: 'Spiliotis et al. (2022)', title: 'Comparison of statistical and machine learning methods for daily SKU demand forecasting', note: '다수 상품의 간헐·불규칙 수요와 RF cross-learning 구조가 유사해 후보 설정에 참고' }],
+    rows: RF_PARAMETER_ROWS,
+    groups: [{ label: '회귀 모델', axes: [{ name: 'max_features', values: ['0.1', '1/3'] }, { name: 'min_samples_leaf', values: ['100', '500'] }] }],
+  },
+  LightGBM: {
+    references: [{ type: '참고 근거', author: 'Sprangers et al. (2024)', title: 'Hierarchical Forecasting at Scale', note: '주단위 대규모 상품수요를 global LightGBM과 rolling validation으로 예측한 구조를 참고' }, { type: '공식문서', author: 'LightGBM', title: 'LGBMRegressor 공식 문서', note: 'num_leaves 공식 기본값 31 확인' }],
+    rows: LGBM_PARAMETER_ROWS,
+    groups: [{ label: '회귀 모델', axes: [{ name: 'num_leaves', values: ['8', '31'] }, { name: 'min_child_samples', values: ['100', '1000'] }] }],
+  },
+  LSTM: {
+    references: [{ type: '모델 적용 근거', author: 'Bandara et al. (2019)', title: 'Sales Demand Forecast in E-commerce Using a Long Short-Term Memory Neural Network Methodology', note: '다상품 e-commerce 시계열을 global LSTM으로 학습한 구조가 본 프로젝트와 유사' }, { type: '파라미터 참고', author: 'Zhou et al. (2021)', title: 'Informer 논문의 LSTM baseline', note: 'hidden dimension 후보 {32, 64, 128, 256}에 실제 후보 포함' }],
+    rows: [{ param: 'hidden_size', meaning: '은닉 상태 크기', evidence: '시계열 LSTM baseline 후보 {32,64,128,256} 중 32,64 사용', search: '{32, 64}' }],
+    groups: [{ label: 'LSTM', axes: [{ name: 'hidden_size', values: ['32', '64'] }] }],
+  },
+  TFT: {
+    references: [{ type: '모델 적용 근거', author: 'Lim et al. (2021)', title: 'Temporal Fusion Transformers for Interpretable Multi-Horizon Time Series Forecasting', note: '정적·미래 known·과거 observed 변수를 함께 쓰는 multi-horizon 구조를 참고' }, { type: '파라미터 참고', author: 'PyTorch Forecasting', title: 'TemporalFusionTransformer 공식 구현', note: '실제 구현체의 hidden_size 설정 범위 확인' }],
+    rows: [{ param: 'hidden_size', meaning: '모델 내부 표현 차원', evidence: '공식 튜토리얼 참고값 8 · 공식 구현 범위 하한 16', search: '{8, 16}' }],
+    groups: [{ label: 'TFT', axes: [{ name: 'hidden_size', values: ['8', '16'] }] }],
+  },
+  Informer: {
+    references: [{ type: '참고 근거', author: 'Zhou et al. (2021)', title: 'Informer: Beyond Efficient Transformer for Long Sequence Time-Series Forecasting', note: '원논문 architecture 실험의 n_heads 후보 {8, 16}을 동일하게 적용' }],
+    rows: [{ param: 'n_heads', meaning: 'Attention head 수', evidence: '원논문 후보 {8, 16}과 동일', search: '{8, 16}' }],
+    groups: [{ label: 'Informer', axes: [{ name: 'n_heads', values: ['8', '16'] }] }],
+  },
+  'Hurdle-RF': {
+    references: [{ type: '참고 근거', author: 'Spiliotis et al. (2022)', title: 'Comparison of statistical and machine learning methods for daily SKU demand forecasting', note: 'Hurdle 자체가 아닌 분류기·회귀기의 RF complexity 후보를 동일하게 설정하기 위해 참고' }],
+    rows: [
+      ...RF_PARAMETER_ROWS.map((row) => ({ ...row, param: `분류기 ${row.param}` })),
+      ...RF_PARAMETER_ROWS.map((row) => ({ ...row, param: `회귀기 ${row.param}` })),
+      { param: '회귀기 target_transform', meaning: '판매량 학습 단위', evidence: '', search: '{raw, log1p}' },
+    ],
+    groups: [
+      { label: '분류기', axes: [{ name: 'max_features', values: ['0.1', '1/3'] }, { name: 'min_samples_leaf', values: ['100', '500'] }] },
+      { label: '회귀기', axes: [{ name: 'max_features', values: ['0.1', '1/3'] }, { name: 'min_samples_leaf', values: ['100', '500'] }, { name: 'target_transform', values: ['raw', 'log1p'] }] },
+    ],
+  },
+  'Hurdle-LightGBM': {
+    references: [{ type: '참고 근거', author: 'Sprangers et al. (2024)', title: 'Hierarchical Forecasting at Scale', note: 'Hurdle 자체가 아닌 분류기·회귀기의 LightGBM complexity 후보를 동일하게 설정하기 위해 참고' }, { type: '공식문서', author: 'LightGBM', title: 'LGBMClassifier · LGBMRegressor 공식 문서', note: 'num_leaves 공식 기본값 31 확인' }],
+    rows: [
+      ...LGBM_PARAMETER_ROWS.map((row) => ({ ...row, param: `분류기 ${row.param}` })),
+      ...LGBM_PARAMETER_ROWS.map((row) => ({ ...row, param: `회귀기 ${row.param}` })),
+    ],
+    groups: [
+      { label: '분류기', axes: [{ name: 'num_leaves', values: ['8', '31'] }, { name: 'min_child_samples', values: ['100', '1000'] }] },
+      { label: '회귀기', axes: [{ name: 'num_leaves', values: ['8', '31'] }, { name: 'min_child_samples', values: ['100', '1000'] }] },
+    ],
+  },
+};
 
 export const ML_DL_MODEL_DETAIL = {
   RF: {
     label: 'RF', track: 'ml',
+    parameterUi: PARAMETER_UI.RF,
+    mainCard: {
+      principle: '여러 결정트리의 예측을 종합해 판매량을 예측',
+      reason: '비선형 관계를 학습하는 기본 머신러닝 후보로 비교',
+    },
     structure: {
+      implementation: 'Random Forest 회귀 모델',
+      trainingUnit: '여러 상품을 통합해 학습하는 Global 모델',
+      predictionMethod: '상품·수요이력·시간·외부환경 변수를 이용해 판매량 예측',
       library: 'sklearn.ensemble.RandomForestRegressor',
       unit: '센터 × SKU × 주 row 단위 — A센터 데이터로 학습',
       flow: ['입력 30개 feature', '여러 결정 트리 학습(bagging)', '트리 예측 평균', 'log1p → expm1 역변환'],
@@ -80,8 +167,8 @@ export const ML_DL_MODEL_DETAIL = {
     variableGroups: mlVariableGroups,
     preprocessing: [
       ...ML_TREE_PREPROCESSING_COMMON,
-      { target: '구조적 결측 5종(adi/cv2/qty_lag1/rollmean4/rollstd4)', method: 'train 기준 KAN 소→중→대분류→전체 순 계층형 median 대체', reason: 'RF는 결측을 직접 처리하지 못해 대체가 필요 — LightGBM(native missing 허용)과 대조되는 지점' },
-      { target: 'KAN 대/중/소분류', method: 'OneHotEncoder(handle_unknown="ignore")로 인코딩', reason: '트리 분기 기준으로 범주형을 사용하기 위함, train에서 학습한 카테고리만 사용' },
+      { target: '결측값 보완', columns: 'adi_expanding_filled · cv2_expanding_filled · qty_lag1_filled_log1p · qty_rollmean_4_filled_log1p · qty_rollstd_4_filled_log1p', method: '학습 데이터의 KAN 소분류 → 중분류 → 대분류 → 전체 중앙값 순서로 보완', reason: 'RF가 빈 값을 직접 처리할 수 없어 상품군 특성을 최대한 유지해 보완' },
+      { target: '범주형 변환', columns: 'KAN_대분류 · KAN_중분류 · KAN_소분류', method: '학습 데이터에서 범주별 숫자 열로 변환하고, 처음 보는 범주는 모두 0으로 처리', reason: '상품분류를 트리의 분기 조건으로 사용' },
     ],
     paramRationale: {
       priorResearch: {
@@ -111,7 +198,15 @@ export const ML_DL_MODEL_DETAIL = {
 
   LightGBM: {
     label: 'LGBM', track: 'ml',
+    parameterUi: PARAMETER_UI.LightGBM,
+    mainCard: {
+      principle: '이전 트리의 오차를 순차적으로 보완하며 판매량을 예측',
+      reason: '다양한 상품·수요·외부 변수를 함께 활용하는 부스팅 모델로 비교',
+    },
     structure: {
+      implementation: 'LightGBM 회귀 모델',
+      trainingUnit: '여러 상품을 통합해 학습하는 Global 모델',
+      predictionMethod: '다양한 입력 변수와 판매량 사이의 비선형 관계를 학습해 수요 예측',
       library: 'lightgbm.LGBMRegressor',
       unit: '센터 × SKU × 주 row 단위 — A센터 데이터로 학습',
       flow: ['입력 30개 feature', 'gradient boosting 트리 순차 학습', 'log1p → expm1 역변환'],
@@ -120,8 +215,7 @@ export const ML_DL_MODEL_DETAIL = {
     variableGroups: mlVariableGroups,
     preprocessing: [
       ...ML_TREE_PREPROCESSING_COMMON,
-      { target: 'KAN 대/중/소분류', method: 'pandas Categorical dtype으로 유지 → LightGBM native categorical 처리', reason: 'OneHot 대신 LightGBM 고유 categorical 분기 활용 (RF와 반대 전략)' },
-      { target: '구조적 결측 5종(adi/cv2/qty_lag1/rollmean4/rollstd4)', method: '대체하지 않고 LightGBM native missing으로 그대로 사용', reason: 'LightGBM은 결측을 분기 기준에 포함해 직접 처리 가능 (RF의 median 대체와 반대 전략)' },
+      { target: '범주형 처리', columns: 'KAN_대분류 · KAN_중분류 · KAN_소분류', method: '범주형 정보로 유지해 LightGBM이 분류값을 직접 구분하도록 처리', reason: '상품분류에 맞는 전용 분기 방식을 사용' },
     ],
     paramRationale: {
       priorResearch: {
@@ -155,7 +249,15 @@ export const ML_DL_MODEL_DETAIL = {
 
   LSTM: {
     label: 'LSTM', track: 'dl',
+    parameterUi: PARAMETER_UI.LSTM,
+    mainCard: {
+      principle: '최근 수요 흐름을 순차적으로 학습해 미래 판매량을 예측',
+      reason: '시계열 패턴 학습 효과를 확인하기 위한 딥러닝 후보',
+    },
     structure: {
+      implementation: 'PyTorch LSTM 시계열 모델',
+      trainingUnit: '여러 상품을 통합해 학습하는 Global 모델',
+      predictionMethod: '최근 13주 수요 흐름과 상품 정보를 학습해 미래 판매량 예측',
       library: 'PyTorch nn.LSTM 직접 구현(라이브러리 래퍼 아님)',
       unit: 'A센터 전체 SKU를 풀링한 global 모델 1개 (SKU별 개별 모델 아님)',
       flow: ['13주 lookback 시퀀스', 'LSTM으로 시계열 패턴 학습', '마지막 hidden state + static feature 결합', 'Linear로 h값 직접 예측(Direct)'],
@@ -163,11 +265,11 @@ export const ML_DL_MODEL_DETAIL = {
     },
     variableGroups: dlVariableGroups,
     preprocessing: [
-      { target: '구조적 결측(adi/cv2)', method: 'train 기준 KAN 소→중→대분류→전체 순 계층형 median 대체', reason: '시퀀스 생성 전 잔여 결측 제거' },
-      { target: '13주 lookback 시퀀스', method: '(center,sku) 정렬 후 연속 이력 슬라이딩 윈도우 생성', reason: '연속성이 끊기거나 target이 NaN인 origin은 skip' },
-      { target: '연속형 변수(static+time-varying)', method: 'train 기준 z-score 표준화', reason: '신경망 입력 스케일 정규화' },
-      { target: 'KAN 대/중/소분류', method: 'train 기준 vocabulary로 정수 인덱스화(미확인 값은 <UNK>)', reason: 'embedding 입력을 위한 인덱싱' },
-      { target: 'target', method: 'loss 계산 시 log1p 변환', reason: '수요 분포 왜도 감소' },
+      { target: '결측값 보완', columns: 'adi_expanding_filled · cv2_expanding_filled', method: '학습 데이터의 KAN 소분류 → 중분류 → 대분류 → 전체 중앙값 순서로 보완', reason: '연속된 입력 구간을 만들기 전에 빈 값을 제거' },
+      { target: '시간가변 수치 변수 표준화', columns: DL_TIME_VARYING_STANDARDIZED_COLUMNS, method: '학습 데이터 기준 평균·표준편차로 표준화', reason: '변수 간 스케일 차이를 줄여 신경망 학습 안정화' },
+      { target: '정적 수치 변수 표준화', columns: DL_STATIC_STANDARDIZED_COLUMNS, method: '학습 데이터 기준 평균·표준편차로 표준화', reason: '변수 간 스케일 차이를 줄여 신경망 학습 안정화' },
+      { target: '범주형 변환', columns: 'KAN_대분류 · KAN_중분류 · KAN_소분류', method: '학습 데이터에서 정수 번호를 부여하고 처음 보는 범주는 미등록 값으로 처리', reason: '상품분류를 임베딩 입력으로 사용' },
+      { target: '학습 목표 변환', columns: 'target_h1 · target_h2 · target_h4', method: '학습 오차를 계산할 때 목표 판매수량에 1을 더해 로그 변환', reason: '큰 판매량의 영향을 완화' },
     ],
     paramRationale: {
       priorResearch: {
@@ -198,7 +300,15 @@ export const ML_DL_MODEL_DETAIL = {
 
   TFT: {
     label: 'TFT', track: 'dl',
+    parameterUi: PARAMETER_UI.TFT,
+    mainCard: {
+      principle: '상품·시간·수요 정보를 함께 학습하고 중요한 변수와 시점에 집중',
+      reason: '다양한 시계열 변수의 활용 효과를 확인하기 위한 모델',
+    },
     structure: {
+      implementation: 'Temporal Fusion Transformer',
+      trainingUnit: '여러 상품의 시계열을 함께 학습하는 Global 모델',
+      predictionMethod: '과거 수요와 상품·시간·외부 변수를 함께 학습해 미래 수요 예측',
       library: 'pytorch_forecasting.TemporalFusionTransformer.from_dataset() (서드파티 라이브러리 그대로 사용)',
       unit: 'A센터 전체를 하나의 TimeSeriesDataSet으로 학습하는 global 모델',
       flow: ['13주 encoder + 1-step decoder 구성', 'static/known/observed 역할별 입력', 'Attention 기반 시계열 학습', 'h값 직접 예측(Direct)'],
@@ -206,10 +316,11 @@ export const ML_DL_MODEL_DETAIL = {
     },
     variableGroups: dlVariableGroups,
     preprocessing: [
-      { target: '구조적 결측(adi/cv2)', method: 'LSTM과 동일 계층형 median 대체', reason: '시퀀스 생성 전 잔여 결측 제거' },
-      { target: 'encoder(13주) + decoder(1주)', method: 'long-format 변환 — decoder의 known(캘린더/공휴일)은 실측값, observed는 origin 마지막 시점 값 재사용', reason: '미래 실측이 없는 observed feature가 decoder로 새어 들어가지 않도록 방지(매 fold assert로 검증)' },
-      { target: 'target', method: 'target_log1p 컬럼으로 직접 log1p 값 세팅, target_normalizer=identity(TFT 자체 재스케일 안 함)', reason: '이미 log1p된 값을 그대로 사용' },
-      { target: 'KAN 대/중/소분류', method: 'NaNLabelEncoder(add_nan=True)로 train-fit, 미확인 카테고리는 자동 NaN 처리', reason: 'pytorch_forecasting 라이브러리 내장 encoder 사용(LSTM의 수동 <UNK> 방식과 다름)' },
+      { target: '결측값 보완', columns: 'adi_expanding_filled · cv2_expanding_filled', method: 'LSTM과 같은 상품분류 단계별 중앙값으로 보완', reason: '연속된 입력 구간을 만들기 전에 빈 값을 제거' },
+      { target: '시간가변 수치 변수 표준화', columns: DL_TIME_VARYING_STANDARDIZED_COLUMNS, method: '학습 데이터 기준 평균·표준편차로 표준화', reason: '변수 간 스케일 차이를 줄여 신경망 학습 안정화' },
+      { target: '정적 수치 변수 표준화', columns: DL_STATIC_STANDARDIZED_COLUMNS, method: '학습 데이터 기준 평균·표준편차로 표준화', reason: '변수 간 스케일 차이를 줄여 신경망 학습 안정화' },
+      { target: '학습 목표 변환', columns: 'target_h1 · target_h2 · target_h4 → target_log1p', method: '목표 판매수량에 1을 더해 로그 변환하고 별도의 target 정규화는 적용하지 않음', reason: '큰 판매량의 영향을 완화하고 변환된 단위를 그대로 학습' },
+      { target: '범주형 변환', columns: 'KAN_대분류 · KAN_중분류 · KAN_소분류', method: '학습 데이터에서 범주별 번호를 만들고 처음 보는 범주는 결측 범주로 처리', reason: '라이브러리의 범주형 인코더를 사용' },
     ],
     paramRationale: {
       priorResearch: {
@@ -241,7 +352,15 @@ export const ML_DL_MODEL_DETAIL = {
 
   Informer: {
     label: 'Informer', track: 'dl',
+    parameterUi: PARAMETER_UI.Informer,
+    mainCard: {
+      principle: '과거 시계열의 중요한 시점에 집중해 미래 수요를 예측',
+      reason: 'Attention 기반 시계열 학습 효과를 비교하기 위한 모델',
+    },
     structure: {
+      implementation: 'Informer 기반 시계열 Transformer',
+      trainingUnit: '여러 상품의 시계열을 함께 학습하는 Global 모델',
+      predictionMethod: 'Attention으로 과거 시계열 패턴을 학습해 미래 수요 예측',
       library: '커스텀 PyTorch 구현(ProbSparse self-attention encoder + encoder distilling + full-attention decoder, 원논문 구조 직접 재구현)',
       unit: 'A센터 전체를 풀링한 global encoder-decoder 모델',
       flow: ['13주 encoder 입력(known+observed)', 'label_len(=lookback/2) 과거 구간 + 1-step decoder', 'ProbSparse attention + distilling', 'h값 직접 예측(Direct)'],
@@ -249,10 +368,10 @@ export const ML_DL_MODEL_DETAIL = {
     },
     variableGroups: dlVariableGroups,
     preprocessing: [
-      { target: '구조적 결측(adi/cv2)', method: 'LSTM/TFT와 동일 계층형 median 대체', reason: '시퀀스 생성 전 잔여 결측 제거' },
-      { target: 'encoder/decoder 텐서', method: 'decoder value는 encoder 마지막 label_len 구간의 qty_log1p(과거)+미래 1스텝 0패딩, decoder known은 캘린더/공휴일 실측값', reason: 'Informer 표준 decoder 입력 구성(label_len=lookback//2)' },
-      { target: '미래 observed feature', method: 'decoder에 전달하지 않음(known 계열만 decoder에 포함)', reason: 'TFT와 동일하게 미래에 알 수 없는 observed feature의 leak 방지' },
-      { target: '연속형 변수', method: 'z-score 표준화(LSTM과 SequencePreprocessor 클래스 공유)', reason: '입력 스케일 정규화' },
+      { target: '결측값 보완', columns: 'adi_expanding_filled · cv2_expanding_filled', method: 'LSTM·TFT와 같은 상품분류 단계별 중앙값으로 보완', reason: '연속된 입력 구간을 만들기 전에 빈 값을 제거' },
+      { target: '시간가변 수치 변수 표준화', columns: DL_TIME_VARYING_STANDARDIZED_COLUMNS, method: '학습 데이터 기준 평균·표준편차로 표준화', reason: '변수 간 스케일 차이를 줄여 신경망 학습 안정화' },
+      { target: '정적 수치 변수 표준화', columns: DL_STATIC_STANDARDIZED_COLUMNS, method: '학습 데이터 기준 평균·표준편차로 표준화', reason: '변수 간 스케일 차이를 줄여 신경망 학습 안정화' },
+      { target: '학습 목표 변환', columns: 'target_h1 · target_h2 · target_h4', method: '학습 오차를 계산할 때 목표 판매수량에 1을 더해 로그 변환', reason: '큰 판매량의 영향을 완화' },
     ],
     paramRationale: {
       priorResearch: {
@@ -283,12 +402,20 @@ export const ML_DL_MODEL_DETAIL = {
 
   'Hurdle-RF': {
     label: 'H-RF', track: 'hurdle',
+    parameterUi: PARAMETER_UI['Hurdle-RF'],
+    mainCard: {
+      principle: '판매 발생 여부와 발생 시 판매량을 분리해 예측',
+      reason: '0수요가 많은 데이터의 과소예측 문제를 완화하기 위해 검토',
+    },
     hurdle: {
       classifierRole: '판매 발생 여부(y>0) 분류 — RandomForestClassifier',
       regressorRole: '양수 수요 행만으로 판매량 회귀 — RandomForestRegressor',
       combination: 'P(y>0) × 조건부 예측값(regressor) = 최종 예측 (soft 곱셈, threshold 없음)',
     },
     structure: {
+      implementation: 'Random Forest 분류기 + 회귀기 Hurdle 모델',
+      trainingUnit: '여러 상품을 통합해 분류·회귀 모델 학습',
+      predictionMethod: '판매 발생 확률과 발생 시 판매량을 각각 예측해 최종 수요 산출',
       library: 'sklearn RandomForestClassifier + RandomForestRegressor 2단계 결합',
       unit: '센터 × SKU × 주 row 단위 — A센터 데이터로 HPO(최종 재학습/2024 Holdout은 미실행 — H-LGBM에 밀려 프로덕션 미채택)',
       flow: ['입력 30개 feature(classifier/regressor 동일)', '① 판매 발생 여부 분류(0/1)', '② 발생 시 판매량 회귀(양수 행만)', 'P(발생) × 회귀예측 = 최종 예측'],
@@ -296,11 +423,11 @@ export const ML_DL_MODEL_DETAIL = {
     },
     variableGroups: mlVariableGroups,
     preprocessing: [
-      { target: 'classification target', method: 'y_raw > 0 (원본 qty 기준 0/1)', reason: '판매 발생 여부 자체를 별도 분류' },
-      { target: 'regressor 학습 데이터', method: 'y_raw > 0인 행만 사용(음수 없음, 0 제외)', reason: '조건부(발생 시) 판매량만 학습' },
-      { target: '구조적 결측 5종', method: 'RF와 동일 — train 기준 KAN 계층형 median 대체', reason: 'classifier/regressor 공통' },
-      { target: 'KAN 대/중/소분류', method: 'RF와 동일 — OneHotEncoder', reason: 'classifier/regressor 공통' },
-      { target: 'regressor target', method: 'target_transform 하이퍼파라미터로 raw/log1p 중 HPO에서 선택(h1~h4 전부 raw로 선정)', reason: 'H-LGBM(log1p 고정)과 달리 HPO 탐색 대상 — non-hurdle baseline RF는 log1p를 쓰는데 Hurdle-RF는 raw가 더 나아 raw로 선정' },
+      { target: '분류 목표 생성', columns: 'target_h1 · target_h2 · target_h4', method: '선택한 예측시점의 목표 판매수량이 0보다 큰지를 0/1 값으로 만들어 분류 모델을 학습', reason: '판매가 발생할 가능성을 먼저 예측' },
+      { target: '회귀 학습행 선별', columns: 'target_h1 · target_h2 · target_h4', method: '선택한 예측시점의 목표 판매수량이 1 이상인 행만 회귀 모델 학습에 사용', reason: '판매가 발생한 경우의 수량만 별도로 예측' },
+      { target: '결측값 보완', columns: 'adi_expanding_filled · cv2_expanding_filled · qty_lag1_filled_log1p · qty_rollmean_4_filled_log1p · qty_rollstd_4_filled_log1p', method: 'RF와 같은 상품분류 단계별 중앙값으로 분류기와 회귀기 입력을 보완', reason: '두 모델 모두 빈 값 없이 같은 입력 변수를 사용' },
+      { target: '범주형 변환', columns: 'KAN_대분류 · KAN_중분류 · KAN_소분류', method: 'RF와 같은 범주별 숫자 열로 변환', reason: '상품분류를 분류기와 회귀기의 트리 분기에 사용' },
+      { target: '회귀 목표 변환', columns: 'target_h1 · target_h2 · target_h4', method: '선택한 예측시점의 원래 판매량과 log1p 변환값을 비교하며, 실제 최종 설정은 원래 판매량을 사용', reason: '판매량 변환 방식까지 함께 비교' },
     ],
     paramRationale: {
       priorResearch: { source: 'RF와 동일 — Spiliotis et al. (2022) 범위를 재사용', reason: 'Hurdle-RF의 목적은 새 capacity 범위 도입이 아니라 동일 조건에서 분류/회귀 분리 효과만 보는 것이므로 RF와 같은 근거 사용', rows: [] },
@@ -314,12 +441,20 @@ export const ML_DL_MODEL_DETAIL = {
 
   'Hurdle-LightGBM': {
     label: 'H-LGBM', track: 'hurdle',
+    parameterUi: PARAMETER_UI['Hurdle-LightGBM'],
+    mainCard: {
+      principle: '판매 발생 확률과 발생 시 판매량을 분리해 최종 수요를 산출',
+      reason: '기존 LightGBM의 과소예측을 완화하면서 WAPE 성능을 유지하기 위해 검토',
+    },
     hurdle: {
       classifierRole: '판매 발생 여부(y>0) 분류 — LGBMClassifier(objective=binary)',
       regressorRole: '양수 수요 행만으로 판매량 회귀 — LGBMRegressor(target=log1p, 예측 후 expm1)',
       combination: 'P(y>0) × expm1(regressor 예측) = 최종 예측 (soft 곱셈, threshold 없음)',
     },
     structure: {
+      implementation: 'LightGBM 분류기 + 회귀기 Hurdle 모델',
+      trainingUnit: '여러 상품을 통합해 분류·회귀 모델 학습',
+      predictionMethod: '판매 발생 확률과 발생 시 판매량을 결합해 최종 수요 산출',
       library: 'lightgbm LGBMClassifier + LGBMRegressor 2단계 결합',
       unit: '센터 × SKU × 주 row 단위 — HP 선정은 A센터 전용, 최종 재학습은 A 전체 + B(체계변경 이후) pooled',
       flow: ['입력 30개 feature(classifier/regressor 동일)', '① 판매 발생 여부 분류(0/1)', '② 발생 시 판매량 회귀(양수 행만, log1p target)', 'P(발생) × expm1(회귀예측) = 최종 예측'],
@@ -327,11 +462,10 @@ export const ML_DL_MODEL_DETAIL = {
     },
     variableGroups: mlVariableGroups,
     preprocessing: [
-      { target: 'classification target', method: 'y_raw > 0 (원본 qty 기준 0/1)', reason: '판매 발생 여부 자체를 별도 분류' },
-      { target: 'regressor 학습 데이터', method: 'y_raw > 0인 행만 사용', reason: '조건부(발생 시) 판매량만 학습 (h1 기준 전체 행의 약 26.6%만 사용)' },
-      { target: 'KAN 대/중/소분류', method: 'LightGBM과 동일 — pandas Categorical dtype(native categorical)', reason: 'classifier/regressor 공통' },
-      { target: '구조적 결측 5종', method: 'LightGBM과 동일 — native missing으로 그대로 사용(대체 없음)', reason: 'classifier/regressor 공통' },
-      { target: 'regressor target', method: 'log1p 고정(HPO 대상 아님) — 예측 후 expm1 역변환', reason: 'target_transform을 탐색한 Hurdle-RF와 달리 log1p로 고정 (fixed_params_regressor)' },
+      { target: '분류 목표 생성', columns: 'target_h1 · target_h2 · target_h4', method: '선택한 예측시점의 목표 판매수량이 0보다 큰지를 0/1 값으로 만들어 분류 모델을 학습', reason: '판매가 발생할 가능성을 먼저 예측' },
+      { target: '회귀 학습행 선별', columns: 'target_h1 · target_h2 · target_h4', method: '선택한 예측시점의 목표 판매수량이 1 이상인 행만 회귀 모델 학습에 사용', reason: '판매가 발생한 경우의 수량만 별도로 예측' },
+      { target: '범주형 처리', columns: 'KAN_대분류 · KAN_중분류 · KAN_소분류', method: 'LightGBM이 범주형 정보를 직접 구분하도록 유지', reason: '분류기와 회귀기에서 같은 상품분류 정보를 사용' },
+      { target: '회귀 목표 변환', columns: 'target_h1 · target_h2 · target_h4', method: '선택한 예측시점의 목표 판매수량에 1을 더해 로그 변환하고, 예측 후 expm1으로 원래 단위로 복원', reason: '큰 판매량의 영향을 완화하며 기존 LightGBM과 같은 변환 유지' },
     ],
     paramRationale: {
       priorResearch: { source: 'LightGBM과 동일 — Sprangers et al. (2024) 범위를 재사용', reason: '기존 LightGBM과 동일 complexity 범위를 사용해 성능 변화가 파라미터 범위가 아니라 Hurdle 구조 도입 자체에서 오도록 조건 통제', rows: [] },

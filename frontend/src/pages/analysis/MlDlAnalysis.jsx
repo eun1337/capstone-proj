@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { api } from '../../api/client.js';
 import EChart from '../../components/charts/EChart.jsx';
 import ModelDetailModal from '../../components/ModelDetailModal.jsx';
-import { ML_DL_MODEL_DETAIL } from './mlDlModelDetailConfig.js';
+import { getMlDlColumnDescription, ML_DL_MODEL_DETAIL } from './mlDlModelDetailConfig.js';
 import './analysis.css';
 import './MlDlAnalysis.css';
 
@@ -612,49 +612,100 @@ function FinalModelCard({ summary, error, selectedModel }) {
   const paramDetails = useModelParamDetails(selectedModel);
   const isFinal = selectedModel === FINAL_MODEL;
   const config = ML_DL_MODEL_DETAIL[selectedModel];
-  const varCount = config.variableGroups('h1').reduce((s, g) => s + g.items.length, 0);
-  const chips = isFinal ? [`입력 ${varCount}개`, '분류 + 회귀', '16개 조합 비교'] : [`입력 ${varCount}개`, config.track === 'dl' ? '시계열 신경망' : config.track === 'hurdle' ? 'Hurdle(분류 + 회귀)' : '머신러닝', '2023 CV 비교'];
+  const modelEntries = summary ? HORIZON_KEYS.map((h) => summary.entries.find((e) => e.model === selectedModel && e.horizon === h)).filter(Boolean) : [];
+  const biasPassCount = modelEntries.filter((entry) => entry.bias_pass).length;
 
   return <div className="az-card md-clickable-summary" role="button" tabIndex={0} aria-haspopup="dialog" onClick={() => setDetailOpen(true)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setDetailOpen(true); } }}>
-    <div className="az-card-hd"><h3>6. {isFinal ? 'ML/DL 대표모델 — Hurdle-LightGBM' : '선택 모델 소개'}</h3><p>A센터 2023 개발검증 결과</p></div>
+    <div className="az-card-hd"><h3>6. {isFinal ? 'ML/DL 대표모델 — Hurdle-LightGBM' : '모델별 결과'}</h3><p>A센터 2023 개발검증 결과</p></div>
     <div className="md-final-title-row">
       <strong className="az-detail-title">{MLDL_MODEL_LABELS[selectedModel]}</strong>
       {isFinal ? <span className="md-final-badge">최종 선정</span> : <span className="md-ref-badge">최종 미선정</span>}
     </div>
-    <p className="md-detail-caption">{isFinal ? '수요 발생 여부와 발생량을 분리해 예측하는 2단계 모델' : config.structure.purpose}</p>
-    <div className="md-summary-chips">{chips.map((chip) => <span key={chip}>{chip}</span>)}</div>
-    {isFinal && <div className="md-final-process">판매 발생 확률 → 발생 시 판매량 → 최종 결합</div>}
+    <div className="md-main-model-summary">
+      <div><span>핵심 원리</span><strong>{config.mainCard.principle}</strong></div>
+      <div><span>검토 이유</span><strong>{config.mainCard.reason}</strong></div>
+    </div>
     {error && <div className="az-hint">{error}</div>}
     {!error && !summary && <div className="az-hint">불러오는 중...</div>}
     {summary && <div className="md-summary-performance">{HORIZON_KEYS.map((h) => { const entry = summary.entries.find((e) => e.model === selectedModel && e.horizon === h); return <div key={h}><b>{horizonLabel(h)}</b>{entry ? <><span>WAPE <strong>{fmtMetric(entry.wape)}%</strong></span><span>Bias <strong>{fmtMetric(entry.bias)}%</strong></span></> : <span>데이터 없음</span>}</div>; })}</div>}
+    {summary && <div className={`md-bias-pass-summary ${biasPassCount === HORIZON_KEYS.length ? 'is-pass' : 'is-fail'}`}><span>Bias 기준 |Bias| ≤ 20%</span><strong>{biasPassCount === HORIZON_KEYS.length ? '1·2·4주 후 모두 통과' : `${biasPassCount}/${HORIZON_KEYS.length}개 예측시점 통과`}</strong></div>}
     {detailOpen && <MlDlDetailModal model={selectedModel} summary={summary} paramDetails={paramDetails} onClose={() => setDetailOpen(false)} />}
   </div>;
 }
 
 
-const MODE_LABEL = { search: '탐색', fixed: '고정', auto: '자동 결정' };
-function ModeTag({ mode }) {
-  return <span className={`mdl-mode-tag mdl-mode-${mode}`}>{MODE_LABEL[mode] || mode}</span>;
+function combinationCount(group) {
+  return group.axes.reduce((count, axis) => count * axis.values.length, 1);
 }
 
-function SourceBlock({ title, data }) {
-  return (
-    <div className="mdl-source-group">
-      <div className="mdl-source-title">{title}</div>
-      <div className="mdl-source-meta"><b>출처</b> · {data.source}<br /><b>참고 이유</b> · {data.reason}</div>
-      {data.rows.length > 0 ? (
-        <table className="mdl-table">
-          <thead><tr><th>파라미터</th><th>목적</th><th>{title === '선행연구' ? '선행연구 범위' : '공식 기본값 / 범위'}</th></tr></thead>
-          <tbody>{data.rows.map((r) => <tr key={r.param}><td><code>{r.param}</code></td><td>{r.purpose}</td><td>{r.range}</td></tr>)}</tbody>
-        </table>
-      ) : <div className="mdl-source-none">명시적 범위 없음</div>}
-    </div>
-  );
+function SearchPlan({ config }) {
+  const groups = config.parameterUi.groups;
+  const total = groups.reduce((count, group) => count * combinationCount(group), 1);
+  return <>
+    <div className="mdl-reference-cards">{config.parameterUi.references.map((reference) => <div key={`${reference.type}-${reference.author}`}><span>{reference.type}</span><strong>{reference.author}</strong><b>{reference.title}</b><small>{reference.note}</small></div>)}</div>
+    <div className="mdl-sub-hd">① 탐색 파라미터</div>
+    <table className="mdl-table mdl-parameter-table">
+      <thead><tr><th>파라미터</th><th>의미</th><th>참고 근거</th><th>실제 탐색</th></tr></thead>
+      <tbody>{config.parameterUi.rows.map((row) => <tr key={row.param}><td><code>{row.param}</code></td><td>{row.meaning}</td><td>{row.evidence}</td><td><strong>{row.search}</strong></td></tr>)}</tbody>
+    </table>
+    <div className="mdl-sub-hd">② 실제 탐색</div>
+    <div className="mdl-search-plan">{groups.map((group) => {
+      const counts = group.axes.map((axis) => axis.values.length);
+      const count = combinationCount(group);
+      const axisLabel = group.axes.map((axis) => axis.name).join(' × ');
+      return <div className="mdl-search-group" key={group.label}><b>{group.label}</b><span>{axisLabel}</span><em>{counts.length === 1 ? `${group.axes[0].name} ${counts[0]}개 후보 비교` : `${counts.join(' × ')} → 총 ${count}개 조합`}</em></div>;
+    })}</div>
+    {groups.length > 1 && <div className="mdl-total-combinations">{groups.map((group) => `${group.label} ${combinationCount(group)}개`).join(' × ')} → 총 <strong>{total}개 조합</strong></div>}
+  </>;
+}
+
+function parseHorizonSelections(text) {
+  if (!text) return [];
+  return [...text.matchAll(/h([124]):\s*(.*?)(?=;\s*h[124]:|$)/g)].map((match) => ({ horizon: `h${match[1]}`, value: match[2].trim() }));
+}
+
+function friendlyHurdleSelection(value) {
+  const match = value.match(/cls\(([^,]+),([^\)]+)\)\/reg\(([^,]+),([^\)]+)\)/);
+  if (!match) return null;
+  return { classifier: `num_leaves=${match[1]} · min_child_samples=${match[2]}`, regressor: `num_leaves=${match[3]} · min_child_samples=${match[4]}` };
+}
+
+function normalizeAppliedColumns(columns) {
+  if (Array.isArray(columns)) return columns;
+  return String(columns || '').split(' · ').map((column) => column.trim()).filter(Boolean);
+}
+
+function PreprocessingTable({ rows }) {
+  const [openRows, setOpenRows] = useState(() => new Set());
+  const toggleRow = (key) => setOpenRows((current) => {
+    const next = new Set(current);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    return next;
+  });
+
+  return <table className="mdl-table mdl-preprocessing-table">
+    <thead><tr><th>처리 대상</th><th>적용 컬럼 수</th><th>처리 방법</th><th>목적</th><th>열기</th></tr></thead>
+    <tbody>{rows.map((row, index) => {
+      const key = `${row.target}-${index}`;
+      const columns = normalizeAppliedColumns(row.columns);
+      const isOpen = openRows.has(key);
+      return <Fragment key={key}>
+        <tr>
+          <td>{row.target}</td>
+          <td><strong className="mdl-columns-count">{columns.length}개</strong></td>
+          <td>{row.method}</td>
+          <td>{row.reason}</td>
+          <td><button type="button" className="mdl-columns-toggle" aria-expanded={isOpen} onClick={() => toggleRow(key)}>{isOpen ? '닫기' : '열기'}</button></td>
+        </tr>
+        {isOpen && <tr className="mdl-columns-detail-row"><td colSpan="5"><table className="mdl-table mdl-columns-detail-table"><thead><tr><th>컬럼명</th><th>컬럼 설명</th></tr></thead><tbody>{columns.map((column) => <tr key={column}><td><code>{column}</code></td><td>{getMlDlColumnDescription(column)}</td></tr>)}</tbody></table></td></tr>}
+      </Fragment>;
+    })}</tbody>
+  </table>;
 }
 
 function MlDlDetailModal({ model, summary, paramDetails, onClose }) {
   const config = ML_DL_MODEL_DETAIL[model];
-  const [varHorizon, setVarHorizon] = useState('h1');
   const [performanceView, setPerformanceView] = useState('cv');
   const [holdout2024, setHoldout2024] = useState(null);
   const isFinalModel = model === FINAL_MODEL;
@@ -669,31 +720,13 @@ function MlDlDetailModal({ model, summary, paramDetails, onClose }) {
     return () => { ignore = true; };
   }, [isFinalModel]);
 
-  const isHurdle = config.track === 'hurdle';
-  const groups = config.variableGroups(varHorizon);
+  const groups = config.variableGroups();
   const anyBiasPass = HORIZON_KEYS.some((h) => summary?.entries.find((e) => e.model === model && e.horizon === h)?.bias_pass);
 
   const sections = [
     {
-      id: 'overview', heading: '개요',
-      body: <>
-        <div className="mdl-kv-row"><span>사용 구현</span><span>{config.structure.library}</span></div>
-        <div className="mdl-kv-row"><span>모델 단위</span><span>{config.structure.unit}</span></div>
-        <div className="mdl-kv-row"><span>사용 목적</span><span>{config.structure.purpose}</span></div>
-        <div className="mdl-flow">{(isHurdle ? ['30개 Feature', '판매발생 분류 + 양수 판매량 회귀', '확률 × 판매량', '최종예측'] : config.structure.flow).map((step, i) => <span key={step}>{i > 0 && <span className="mdl-flow-arrow">→ </span>}{step}</span>)}</div>
-      </>,
-    },
-    {
       id: 'variables', heading: '사용 변수',
-      body: <>
-        <div className="mdl-inline-seg">
-          <span className="mdl-note">공휴일 변수는 예측시점별로 컬럼명이 달라집니다:</span>
-          <div className="md-seg">{HORIZONS.map((h) => (
-            <button key={h.value} className={`md-seg-btn ${varHorizon === h.value ? 'active' : ''}`} onClick={() => setVarHorizon(h.value)}>{h.label}</button>
-          ))}</div>
-        </div>
-        {isHurdle && <div className="mdl-note">분류기와 회귀기는 동일한 변수 목록을 입력으로 사용합니다(별도 축소 없음).</div>}
-        <div className="mdl-variable-groups">{groups.map((g) => (
+      body: <div className="mdl-variable-groups">{groups.map((g) => (
           <details className="mdl-variable-group" key={g.group}>
             <summary>{g.group}<span>{g.items.length}개</span></summary>
             <table className="mdl-table">
@@ -701,39 +734,31 @@ function MlDlDetailModal({ model, summary, paramDetails, onClose }) {
               <tbody>{g.items.map((c) => <tr key={c.col}><td><code>{c.col}</code></td><td>{c.meaning}</td><td>{c.purpose}</td></tr>)}</tbody>
             </table>
           </details>
-        ))}</div>
-      </>,
+        ))}</div>,
     },
     {
       id: 'preprocessing', heading: '전처리',
-      body: <>
-        <div className="mdl-note">공통 데이터 전처리는 제외하고, 이 모델에 입력하기 직전에만 수행한 처리입니다.</div>
-        <table className="mdl-table">
-          <thead><tr><th>처리 대상</th><th>처리 방법</th><th>적용 이유</th></tr></thead>
-          <tbody>{config.preprocessing.map((p) => <tr key={p.target}><td>{p.target}</td><td>{p.method}</td><td>{p.reason}</td></tr>)}</tbody>
-        </table>
-      </>,
+      body: <PreprocessingTable rows={config.preprocessing} />,
     },
     {
       id: 'parameters', heading: '파라미터',
       body: <>
-        <div className="mdl-source-cards"><div className="mdl-source-card"><b>선행연구</b><strong>{config.paramRationale.priorResearch.source}</strong><span>{config.paramRationale.priorResearch.reason}</span></div><div className="mdl-source-card"><b>공식문서</b><strong>{config.paramRationale.officialDocs.source}</strong><span>{config.paramRationale.officialDocs.reason}</span></div></div>
-        {paramDetails ? <table className="mdl-table"><thead><tr><th>파라미터</th><th>목적</th><th>선행연구 범위</th><th>공식 기준</th><th>실제 적용</th></tr></thead>
-          <tbody>
-            {(() => {
-              const rows = paramDetails.h1?.summary || [];
-              const hpo = rows.find((r) => r.parameter_type === 'hpo');
-              const fixed = rows.find((r) => r.parameter_type === 'fixed');
-              return <>
-                {hpo && <tr><td><code>{hpo.parameter}</code></td><td>후보 조합 탐색</td><td>{config.paramRationale.priorResearch.rows.map((r) => r.range).join(' · ') || '—'}</td><td>{config.paramRationale.officialDocs.rows.map((r) => r.range).join(' · ') || '—'}</td><td><ModeTag mode="search" /> {hpo.candidates_or_rule}</td></tr>}
-                {fixed && <tr><td><code>{fixed.parameter}</code></td><td>공통 학습 설정</td><td>—</td><td>—</td><td><ModeTag mode="fixed" /> {fixed.selected_or_fixed}</td></tr>}
-              </>;
-            })()}
-          </tbody>
-        </table> : <div className="mdl-loading">불러오는 중...</div>}
-        <div className="mdl-sub-hd">최종 파라미터</div>
-        {!paramDetails ? <div className="mdl-loading">불러오는 중...</div> : anyBiasPass ? (isFinalModel ? <><table className="mdl-table"><thead><tr><th>예측시점</th><th>분류기</th><th>회귀기</th></tr></thead><tbody><tr><td>1주 후</td><td><code>num_leaves=31 · min_child_samples=100</code></td><td><code>num_leaves=31 · min_child_samples=100</code></td></tr><tr><td>2주 후</td><td><code>num_leaves=31 · min_child_samples=1000</code></td><td><code>num_leaves=31 · min_child_samples=100</code></td></tr><tr><td>4주 후</td><td><code>num_leaves=31 · min_child_samples=1000</code></td><td><code>num_leaves=31 · min_child_samples=100</code></td></tr></tbody></table><p className="mdl-note"><code>learning_rate=0.1</code> · <code>n_estimators=100</code> · regressor target=<code>log1p</code> · soft 결합</p></> : <table className="mdl-table"><thead><tr><th>예측시점</th><th>최종값</th><th>구분</th></tr></thead><tbody>{HORIZON_KEYS.map((h) => { const hpo = paramDetails[h]?.summary.find((row) => row.parameter_type === 'hpo'); return <tr key={h}><td>{horizonLabel(h)}</td><td>{hpo?.selected_or_fixed || '—'}</td><td><ModeTag mode="search" /></td></tr>; })}</tbody></table>) : <div className="mdl-final-status is-none">Bias 기준 통과 후보 없음 · 최종 선정 파라미터 없음</div>}
-        <details className="mdl-compact-details"><summary>선정 근거 상세 보기</summary><div className="mdl-lead">{config.hpoNarrative}</div><div className="mdl-lead">{config.fixedNarrative}</div>{config.lookbackNote && <div className="mdl-lead">{config.lookbackNote}</div>}{config.extraNotes.map((note) => <div className="mdl-note" key={note}>{note}</div>)}</details>
+        <SearchPlan config={config} />
+        <div className="mdl-fixed-parameters">
+          <b>고정값</b>
+          {!paramDetails ? <span>불러오는 중...</span> : paramDetails.h1?.summary.filter((row) => row.parameter_type === 'fixed').map((row) => <span key={row.parameter}><code>{row.parameter}</code><strong>{row.selected_or_fixed}</strong></span>)}
+        </div>
+        <div className="mdl-sub-hd">③ 최종 파라미터</div>
+        {!paramDetails ? <div className="mdl-loading">불러오는 중...</div> : (() => {
+          const hpo = paramDetails.h1?.summary.find((row) => row.parameter_type === 'hpo');
+          const horizonSelections = parseHorizonSelections(hpo?.selected_or_fixed);
+          if (!anyBiasPass || !hpo || hpo.selected_or_fixed.startsWith('선택 없음')) return <div className="mdl-final-status is-none">Bias 기준 통과 후보가 없어 최종 파라미터를 선정하지 않음</div>;
+          if (horizonSelections.length) return <table className="mdl-table mdl-final-parameter-table"><thead><tr><th>예측시점</th><th>분류기</th><th>회귀기</th></tr></thead><tbody>{horizonSelections.map((row) => {
+            const parsed = friendlyHurdleSelection(row.value);
+            return <tr key={row.horizon}><td>{horizonLabel(row.horizon)}</td><td><code>{parsed?.classifier || row.value}</code></td><td><code>{parsed?.regressor || row.value}</code></td></tr>;
+          })}</tbody></table>;
+          return <div className="mdl-final-parameter-common"><span>전 예측시점 공통</span><strong>{hpo.selected_or_fixed}</strong></div>;
+        })()}
       </>,
     },
     {
