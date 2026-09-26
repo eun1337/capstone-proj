@@ -562,7 +562,9 @@ function TableauView({ onBack }) {
       viz.setAttribute('src', TABLEAU_VIZ_URL);
       viz.setAttribute('token', token);
       viz.setAttribute('toolbar', 'top');
-      viz.setAttribute('device', 'desktop');
+      // device는 지정하지 않는다(default) — 'desktop' 고정 시 좁은 화면에서도 데스크톱 레이아웃이
+      // 강제되어 우측이 잘린다. default면 컨테이너 폭에 맞는 Phone/Tablet 레이아웃이 선택된다.
+      // width/height 속성도 지정하지 않는다 — 지정하면 API가 fixedSize로 간주해 자동 리사이즈를 끈다.
       // 시트 탭을 보이게 하려면 아래 줄을 삭제하세요
       viz.setAttribute('hide-tabs', '');
       viz.style.cssText = 'width:100%;height:100%;display:block;';
@@ -577,6 +579,31 @@ function TableauView({ onBack }) {
       vizRef.current = null;
     };
   }, [status, token]);
+
+  // ── 컨테이너 크기 변화 → Tableau 재배치 ─────────────────────────────────────
+  // Embedding API는 window 'resize' 이벤트에서만 부모 크기를 다시 재서 iframe px 크기를 갱신한다.
+  // 창 크기 변화 없이 컨테이너만 바뀌는 경우(사이드바 토글, 탭 전환, 레이아웃 변경)에는
+  // 첫 측정값이 그대로 남아 잘림이 생기므로, ResizeObserver로 감지해 resize 이벤트를 대신 발생시킨다.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (status !== 'ready' || !el || typeof ResizeObserver === 'undefined') return;
+
+    let frame = 0;
+    let last = { w: el.clientWidth, h: el.clientHeight };
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      if (Math.round(width) === last.w && Math.round(height) === last.h) return;
+      last = { w: Math.round(width), h: Math.round(height) };
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    });
+    ro.observe(el);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
+  }, [status]);
 
 
   // ── 재시도 ────────────────────────────────────────────────────────────────
@@ -615,7 +642,7 @@ function TableauView({ onBack }) {
           </div>
         )}
         {/* <tableau-viz>는 위 useEffect에서 명령형으로 이 div 안에 마운트됨 */}
-        <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+        <div ref={containerRef} className="tableau-viz-host" />
       </div>
     </div>
   );
