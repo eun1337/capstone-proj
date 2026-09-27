@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
 import { saveSession } from '../api/session.js';
 import './Login.css';
@@ -10,6 +10,7 @@ export default function Login() {
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -22,7 +23,8 @@ export default function Login() {
     try {
       const data = await api.login(username, password);
       saveSession(data);
-      navigate('/dashboard');
+      const from = location.state?.from;
+      navigate(from ? `${from.pathname}${from.search}` : '/dashboard');
     } catch (err) {
       setError(err.message || '로그인에 실패했습니다.');
     } finally {

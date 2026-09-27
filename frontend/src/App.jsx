@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { hasValidSession } from './api/session.js';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
@@ -9,7 +9,9 @@ import MlDlAnalysis from './pages/analysis/MlDlAnalysis.jsx';
 import ModelComparison from './pages/analysis/ModelComparison.jsx';
 
 function PrivateRoute({ children }) {
-  return hasValidSession() ? children : <Navigate to="/" replace />;
+  const location = useLocation();
+  // 로그인 후 원래 주소(딥링크 쿼리 포함)로 돌아갈 수 있게 from을 넘긴다.
+  return hasValidSession() ? children : <Navigate to="/" replace state={{ from: location }} />;
 }
 
 export default function App() {

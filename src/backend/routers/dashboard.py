@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 from services.dashboard_data import (
-    load_daily_demand,
+    load_daily_demand_sku,
     load_daily_region_agg,
     load_daily_sku_grid,
     load_daily_summary_agg,
@@ -24,17 +24,17 @@ from services.dashboard_data import (
     load_sales_transactions_raw,
     load_weekly_demand,
     load_weekly_transactions,
+    load_weekly_transactions_sku,
     resolve_forecast_basis_week_for_date,
 )
 
 router = APIRouter()
 
-# 대시보드 메인 화면 진입/센터 전환 시 한 번에 몰리는 9개 endpoint에는 @lru_cache를 직접
-# 얹었다(아래 각 함수 위 표시). 쿼리 파라미터가 전부 str/int/None이라 그대로 캐시 키로 쓸 수
-# 있고, FastAPI는 lru_cache 래퍼의 __wrapped__를 따라가 원래 시그니처를 정확히 인식한다.
-# main.py의 lifespan이 기동 시 이 9개를 A/B센터·기본 조회일(2024-09-30/29)로 한 번씩 직접
-# 호출해 미리 채워 두므로, 발표 중 그 조합을 다시 누르면 pandas 재계산 없이 바로 반환된다.
-# (다른 날짜/카테고리 조합은 최초 1회는 정상적으로 느리고, 그 다음부터 그 조합만 빨라진다.)
+# 대시보드 메인 화면 9개 endpoint와 상품 상세 뷰 endpoint(forecast/inventory/daily transactions)에는
+# @lru_cache를 직접 얹었다(아래 각 함수 위 표시). 쿼리 파라미터가 전부 str/int/None이라 그대로
+# 캐시 키로 쓸 수 있고, FastAPI는 lru_cache 래퍼의 __wrapped__를 따라가 원래 시그니처를 정확히 인식한다.
+# 전체 parquet 기동 예열은 저사양 서버 메모리 부족으로 꺼 두었으므로, 각 조합은 최초 1회만 느리고
+# 그 다음부터 바로 반환된다(main.py lifespan은 시연 상품 2종의 SKU 단위 캐시만 채운다).
 def _filter_by_center(df: pd.DataFrame, center: Optional[str]) -> pd.DataFrame:
     if center and center != "ALL":
         df = df[df["center_id"] == center]
@@ -219,6 +219,7 @@ def _horizon(fc_row: Optional[pd.Series], prefix: str) -> Optional[HorizonForeca
 
 
 @router.get("/forecast", response_model=ForecastResponse)
+@lru_cache(maxsize=256)
 def get_forecast(
     center:         str            = Query(..., description="A / B"),
     sku_id:         str            = Query(...),
@@ -244,8 +245,8 @@ def get_forecast(
             basis_week = pd.Timestamp(week_st)
         except ValueError:
             raise HTTPException(status_code=400, detail="week_st 형식이 올바르지 않습니다 (YYYY-MM-DD).")
-        if basis_week.weekday() != 0:
-            raise HTTPException(status_code=400, detail="week_st는 월요일 기준주만 허용됩니다.")
+        # 조회일(예: 2024-10-04 금)이 들어와도 그 주 월요일 기준주로 보정한다.
+        basis_week = basis_week - pd.Timedelta(days=basis_week.weekday())
         if not (wd_sku["week_st"] == basis_week).any():
             raise HTTPException(status_code=400, detail="해당 center_id+sku_id에 존재하지 않는 week_st입니다.")
     else:
@@ -549,6 +550,7 @@ class InventoryResponse(BaseModel):
 
 
 @router.get("/inventory", response_model=InventoryResponse)
+@lru_cache(maxsize=256)
 def get_inventory(
     center:         str            = Query(..., description="A / B"),
     sku_id:         str            = Query(...),
@@ -565,8 +567,7 @@ def get_inventory(
         raise HTTPException(status_code=404, detail="해당 center_id+sku_id 상품을 찾을 수 없습니다.")
     pm_row = pm_match.iloc[0]
 
-    tx_sku = load_weekly_transactions()
-    tx_sku = tx_sku[(tx_sku["center_id"] == center) & (tx_sku["sku_id"] == sku_id)]
+    tx_sku = load_weekly_transactions_sku(center, sku_id)
     inv_sku = load_inventory_weekly()
     inv_sku = inv_sku[(inv_sku["center_id"] == center) & (inv_sku["sku_id"] == sku_id)]
     if tx_sku.empty or inv_sku.empty:
@@ -675,8 +676,7 @@ def get_transactions(
         raise HTTPException(status_code=404, detail="해당 center_id+sku_id 상품을 찾을 수 없습니다.")
     pm_row = pm_match.iloc[0]
 
-    tx_sku = load_weekly_transactions()
-    tx_sku = tx_sku[(tx_sku["center_id"] == center) & (tx_sku["sku_id"] == sku_id)]
+    tx_sku = load_weekly_transactions_sku(center, sku_id)
     if tx_sku.empty:
         raise HTTPException(status_code=404, detail="해당 SKU의 실적 데이터가 없습니다.")
 
@@ -1373,9 +1373,9 @@ def get_daily_summary(
     spark_start = basis_date - pd.Timedelta(days=29)
 
     if sku_id:
-        # sku_id 필터는 frontend가 쓰지 않는 드문 경로라 canonical 31M을 그대로 쓴다
-        # (단일 SKU만 남기 때문에 실제 스캔 비용은 미미하다) — API contract는 완전히 동일하다.
-        dd_raw = _filter_by_center(load_daily_demand(), center)
+        # 상품 상세 뷰가 쓰는 경로 — canonical 31M(약 5GB)을 통째로 올리지 않고 해당 SKU 행만
+        # parquet 필터로 읽어 SKU별로 캐시한다. API contract는 완전히 동일하다.
+        dd_raw = pd.concat([load_daily_demand_sku(c, sku_id) for c in pm["center_id"].unique()])
         dd = dd_raw[(dd_raw["date"] >= spark_start) & (dd_raw["date"] <= basis_date)].merge(
             pm[["center_id", "sku_id", "option_code"]], on=["center_id", "sku_id"], how="inner"
         )
@@ -1972,6 +1972,7 @@ class DailyTransactionsResponse(BaseModel):
 
 
 @router.get("/daily/transactions", response_model=DailyTransactionsResponse)
+@lru_cache(maxsize=256)
 def get_daily_transactions(
     center:         str            = Query(..., description="A / B"),
     sku_id:         str            = Query(...),

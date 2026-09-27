@@ -89,6 +89,39 @@ def load_weekly_transactions() -> pd.DataFrame:
     return pd.read_parquet(DASHBOARD_DIR / "weekly_transactions.parquet")
 
 
+# 시연 핵심 상품 — 기동 직후 warm_demo_skus()가 SKU별 캐시를 미리 채운다.
+DEMO_SKUS = (
+    ("A", "8801094012403*EA*1"),  # 코카콜라<1.5>
+    ("A", "8801094013004*EA*1"),  # 코카콜라<250ml/캔>
+)
+
+
+@lru_cache(maxsize=128)
+def load_weekly_transactions_sku(center_id: str, sku_id: str) -> pd.DataFrame:
+    """단일 SKU의 주간 실적만 parquet 필터로 읽는다. 전체(약 1.2GB)를 메모리에 올리지 않기 위함."""
+    return pd.read_parquet(
+        DASHBOARD_DIR / "weekly_transactions.parquet",
+        filters=[("center_id", "==", center_id), ("sku_id", "==", sku_id)],
+    )
+
+
+@lru_cache(maxsize=128)
+def load_daily_demand_sku(center_id: str, sku_id: str) -> pd.DataFrame:
+    """단일 SKU의 일간 실적만 parquet 필터로 읽는다. daily_demand 전체는 3,100만 행·약 5GB라
+    상품 상세 조회 때 통째로 올리면 저사양 서버에서 메모리 부족/타임아웃이 난다."""
+    return pd.read_parquet(
+        DASHBOARD_DIR / "daily_demand.parquet",
+        filters=[("center_id", "==", center_id), ("sku_id", "==", sku_id)],
+    )
+
+
+def warm_demo_skus() -> None:
+    for center_id, sku_id in DEMO_SKUS:
+        load_weekly_transactions_sku(center_id, sku_id)
+        load_daily_demand_sku(center_id, sku_id)
+    logger.info("[warmup] 시연 상품 %d종 SKU 캐시 준비 완료", len(DEMO_SKUS))
+
+
 @lru_cache(maxsize=None)
 def load_inventory_weekly() -> pd.DataFrame:
     return pd.read_parquet(DASHBOARD_DIR / "inventory_weekly.parquet")
@@ -115,11 +148,6 @@ def load_sales_transactions_raw() -> pd.DataFrame:
         df["바코드"].astype(str) + "*" + df["옵션코드"].astype(str) + "*" + df["상품클러스터"].astype(str)
     )
     return df
-
-
-@lru_cache(maxsize=None)
-def load_daily_demand() -> pd.DataFrame:
-    return pd.read_parquet(DASHBOARD_DIR / "daily_demand.parquet")
 
 
 @lru_cache(maxsize=None)

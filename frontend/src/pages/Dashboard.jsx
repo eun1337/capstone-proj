@@ -42,6 +42,36 @@ function mostRecentMonday(iso) {
   return fmtISODate(d);
 }
 
+// 시연용 딥링크 — /dashboard?sku=8801094012403*EA*1&center=A&date=2024-10-04&unit=EA
+// 유효한 값만 채택하고, 파라미터가 없거나 잘못된 값이면 기존 기본값을 그대로 쓴다.
+function readDeepLink(search) {
+  const params = new URLSearchParams(search);
+  const center = params.get('center');
+  const date = params.get('date');
+  const unit = params.get('unit');
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date || '') && date >= OPERATIONAL_DATE_MIN && date <= OPERATIONAL_DATE_MAX;
+  return {
+    sku: params.get('sku') || null,
+    center: center === 'A' || center === 'B' ? center : null,
+    date: validDate ? date : null,
+    unit: UNITS.includes(unit) ? unit : null,
+  };
+}
+
+// 상품 선택 상태를 주소창에 반영한다(새로고침 없이 replaceState). 선택 해제 시 쿼리를 모두 지운다.
+function syncSkuToUrl(sku, center, operationalDate) {
+  const params = new URLSearchParams();
+  if (sku) {
+    params.set('sku', sku.sku_id);
+    if (center !== 'A') params.set('center', center);
+    if (operationalDate !== DEFAULT_OPERATIONAL_DATE) params.set('date', operationalDate);
+  }
+  const qs = params.toString();
+  const next = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`;
+  const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (next !== current) window.history.replaceState(window.history.state, '', next);
+}
+
 function formatDateLabel(iso) {
   const d = new Date(`${iso}T00:00:00`);
   const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -50,9 +80,10 @@ function formatDateLabel(iso) {
 
 export default function Dashboard() {
   const location = useLocation();
-  const [center, setCenter] = useState('A');
-  const [operationalDate, setOperationalDate] = useState(DEFAULT_OPERATIONAL_DATE);
-  const [topUnit, setTopUnit] = useState('EA');
+  const [deepLink] = useState(() => readDeepLink(location.search));
+  const [center, setCenter] = useState(deepLink.center || 'A');
+  const [operationalDate, setOperationalDate] = useState(deepLink.date || DEFAULT_OPERATIONAL_DATE);
+  const [topUnit, setTopUnit] = useState(deepLink.unit || 'EA');
   const [activeTab, setActiveTab] = useState(location.state?.tab === 'tableau' ? 'tableau' : 'dashboard');
   const [historyWeeks, setHistoryWeeks] = useState(4);
 
@@ -74,6 +105,38 @@ export default function Dashboard() {
 
   const navigate = useNavigate();
   const username = localStorage.getItem('username') || 'admin';
+
+  // ?sku= 딥링크로 들어오면 해당 상품을 찾아 자동 선택한다. 카테고리도 그 상품의 KAN 경로로
+  // 맞춘다 — summary API가 카테고리+SKU를 함께 필터하므로 경로가 어긋나면 404가 난다.
+  const deepLinkPending = useRef(Boolean(deepLink.sku));
+  useEffect(() => {
+    if (!deepLink.sku) return;
+    let ignore = false;
+    const skuCenter = deepLink.center || 'A';
+    api.getDashboardProducts({ center: skuCenter, search: deepLink.sku.split('*')[0] })
+      .then((list) => list.find((x) => x.sku_id === deepLink.sku) || null)
+      .catch(() => null)
+      .then((p) => {
+        if (ignore) return;
+        deepLinkPending.current = false;
+        if (!p) {
+          // 상품을 못 찾으면 잘못된 ?sku=가 주소창에 남지 않게 정리하고 기본 화면을 유지한다.
+          syncSkuToUrl(null, skuCenter, DEFAULT_OPERATIONAL_DATE);
+          return;
+        }
+        setSelectedPath([p.KAN_대분류, p.KAN_중분류, p.KAN_소분류]);
+        setOpenMap({ [p.KAN_대분류]: true, [`${p.KAN_대분류}>${p.KAN_중분류}`]: true });
+        setSelectedSku(p);
+        setTopUnit(p.option_code);
+      });
+    return () => { ignore = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (deepLinkPending.current) return;
+    syncSkuToUrl(selectedSku, center, operationalDate);
+  }, [selectedSku, center, operationalDate]);
 
   useEffect(() => {
     let ignore = false;

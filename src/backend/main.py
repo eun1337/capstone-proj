@@ -10,12 +10,25 @@ try:
 except ImportError:
     pass  # python-dotenv 미설치 시 OS 환경변수만 사용
 
+import threading
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from fastapi.middleware.cors import CORSMiddleware
 from routers import auth, tableau, logistics, dashboard, model_analysis
+from services.dashboard_data import warm_demo_skus
 
-app = FastAPI(title="물류 수요 예측 API", version="1.0.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 시연 상품 2종의 SKU 단위 캐시만 백그라운드로 채운다(수 MB 수준). 전체 parquet 예열은
+    # 저사양 서버 메모리 부족으로 꺼 둔 상태이므로 여기서 되살리지 않는다. 기동은 막지 않는다.
+    threading.Thread(target=warm_demo_skus, daemon=True).start()
+    yield
+
+
+app = FastAPI(title="물류 수요 예측 API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
