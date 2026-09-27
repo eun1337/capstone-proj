@@ -1,4 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { clearSession } from '../../api/session.js';
 import { IconAward, IconBarChart, IconHome, IconLayers } from './icons.jsx';
 import '../Dashboard.css';
 import './AnalysisLayout.css';
@@ -21,8 +22,7 @@ export default function AnalysisLayout() {
   const username = localStorage.getItem('username') || 'admin';
 
   function handleLogout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
+    clearSession();
     navigate('/');
   }
 

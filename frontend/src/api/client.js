@@ -1,3 +1,5 @@
+import { clearSession } from './session.js';
+
 const BASE = '/api';
 const REQUEST_TIMEOUT_MS = 25000;
 const RETRY_DELAY_MS = 1200;
@@ -34,6 +36,11 @@ async function request(path, options = {}, canRetry = true) {
       return request(path, options, false);
     }
     throw new Error('일시적으로 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해주세요.');
+  }
+  // 로그인 세션 만료(3시간)·무효 토큰 → 세션 정리 후 로그인 화면으로
+  if (res.status === 401 && path !== '/login') {
+    clearSession();
+    window.location.assign('/');
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: '서버 오류가 발생했습니다.' }));

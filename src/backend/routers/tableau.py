@@ -3,7 +3,7 @@ Tableau Connected Apps (직접 신뢰) — JWT 발급 엔드포인트
 =========================================================
 
 흐름:
-  1. 사용자 → 우리 서비스 로그인 → Bearer 토큰 발급
+  1. 사용자 → 우리 서비스 로그인 → Bearer 토큰 발급 (3시간 유효, auth.py)
   2. 프론트엔드 → GET /api/tableau-token (Authorization: Bearer <우리토큰>)
   3. 백엔드 → Tableau JWT 생성 후 { token, expires_in } 반환
   4. 프론트엔드 → <tableau-viz token="..."> 에 주입
@@ -28,6 +28,8 @@ import logging
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from routers.auth import decode_access_token
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -61,9 +63,7 @@ _USER_EMAIL_MAP: dict[str, str] = {
 
 def _extract_username(credentials: HTTPAuthorizationCredentials | None) -> str:
     """
-    우리 서비스 Bearer 토큰에서 사용자명을 추출한다.
-    현재는 mock 토큰 형식(mock-jwt-<username>)을 파싱.
-    실제 JWT를 사용한다면 jwt.decode() 로 교체하면 된다.
+    우리 서비스 Bearer 토큰(auth.py가 발급한 3시간 JWT)을 검증하고 사용자명을 추출한다.
     """
     if credentials is None or not credentials.credentials:
         raise HTTPException(
@@ -71,12 +71,7 @@ def _extract_username(credentials: HTTPAuthorizationCredentials | None) -> str:
             detail="로그인 후 이용 가능합니다.",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    token = credentials.credentials
-    # mock 토큰: "mock-jwt-{username}"
-    if token.startswith("mock-jwt-"):
-        return token[len("mock-jwt-"):]
-    # 실제 JWT라면 여기서 decode 후 sub/username 클레임 반환
-    return token
+    return decode_access_token(credentials.credentials)
 
 
 def _resolve_embed_email(username: str) -> str:

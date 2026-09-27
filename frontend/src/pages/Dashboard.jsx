@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
+import { clearSession } from '../api/session.js';
 import CategorySidebar from '../components/CategorySidebar.jsx';
 import ProductPickerModal from '../components/ProductPickerModal.jsx';
 import DashboardMain from './DashboardMain.jsx';
 import './Dashboard.css';
 
-const DEFAULT_OPERATIONAL_DATE = '2024-09-30';
+const DEFAULT_OPERATIONAL_DATE = '2024-10-04';
 const OPERATIONAL_DATE_MIN = '2024-01-01';
 const OPERATIONAL_DATE_MAX = '2024-12-31';
 const UNITS = ['EA', 'BX', 'CS'];
+// 시연 기본 카테고리 — 시연 품목(코카콜라<1.5>, <250ml/캔>)이 속한 소분류 '탄산음료'로 진입한다.
+const DEFAULT_CATEGORY_PATH = ['가공식품', '음료류', '탄산음료'];
+const DEFAULT_OPEN_MAP = { '가공식품': true, '가공식품>음료류': true };
 
 // to가 있는 탭은 별도 라우트(/analysis/*)로 이동하고, 없는 탭은 이 페이지 안에서 전환한다.
 const TABS = [
@@ -55,8 +59,8 @@ export default function Dashboard() {
   const [categoryTree, setCategoryTree] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState(null);
-  const [openMap, setOpenMap] = useState({});
-  const [selectedPath, setSelectedPath] = useState([]);
+  const [openMap, setOpenMap] = useState(DEFAULT_OPEN_MAP);
+  const [selectedPath, setSelectedPath] = useState(DEFAULT_CATEGORY_PATH);
   const [categorySearch, setCategorySearch] = useState('');
 
   const [selectedSku, setSelectedSku] = useState(null);
@@ -351,8 +355,7 @@ export default function Dashboard() {
   }
 
   function handleLogout() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('username');
+    clearSession();
     navigate('/');
   }
 
@@ -362,8 +365,8 @@ export default function Dashboard() {
     setOperationalDate(DEFAULT_OPERATIONAL_DATE);
     setTopUnit('EA');
     setHistoryWeeks(4);
-    setSelectedPath([]);
-    setOpenMap({});
+    setSelectedPath(DEFAULT_CATEGORY_PATH);
+    setOpenMap(DEFAULT_OPEN_MAP);
     setCategorySearch('');
     setSelectedSku(null);
     setShowProductPicker(false);

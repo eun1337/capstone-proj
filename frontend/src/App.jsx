@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { hasValidSession } from './api/session.js';
 import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import AnalysisLayout from './pages/analysis/AnalysisLayout.jsx';
@@ -8,8 +9,7 @@ import MlDlAnalysis from './pages/analysis/MlDlAnalysis.jsx';
 import ModelComparison from './pages/analysis/ModelComparison.jsx';
 
 function PrivateRoute({ children }) {
-  const token = localStorage.getItem('token');
-  return token ? children : <Navigate to="/" replace />;
+  return hasValidSession() ? children : <Navigate to="/" replace />;
 }
 
 export default function App() {

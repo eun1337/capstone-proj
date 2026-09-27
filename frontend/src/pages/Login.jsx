@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api/client.js';
+import { saveSession } from '../api/session.js';
 import './Login.css';
 
 export default function Login() {
@@ -20,8 +21,7 @@ export default function Login() {
     setError('');
     try {
       const data = await api.login(username, password);
-      localStorage.setItem('token', data.access_token);
-      localStorage.setItem('username', data.username);
+      saveSession(data);
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || '로그인에 실패했습니다.');
