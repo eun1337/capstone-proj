@@ -3,6 +3,7 @@ import KpiCard from '../components/KpiCard.jsx';
 import KpiExplainerModal from '../components/KpiExplainerModal.jsx';
 import MainForecastChart from '../components/MainForecastChart.jsx';
 import HistoryRangeControl from '../components/HistoryRangeControl.jsx';
+import MorningAlerts, { getMorningAlerts } from '../components/MorningAlerts.jsx';
 import {
   CategoryOrProductTop5Card, CategoryOrProductDetail, categoryDrilldownInfo,
   RegionTop5Card, RegionDetail, RegionViewToggle,
@@ -217,6 +218,11 @@ export default function DashboardMain({
           </p>
         )}
       </div>
+
+      <MorningAlerts
+        alerts={getMorningAlerts(center, operationalDate)}
+        onAction={(type) => setOpenRank(type === 'SPIKE' ? 'surge' : 'shortage')}
+      />
 
       <div style={gridStyle}>
         {/* ── Row 1 ── */}
