@@ -4,6 +4,7 @@ import { api } from '../api/client.js';
 import { clearSession } from '../api/session.js';
 import CategorySidebar from '../components/CategorySidebar.jsx';
 import ProductPickerModal from '../components/ProductPickerModal.jsx';
+import MorningAlertBell, { getMorningAlerts } from '../components/MorningAlerts.jsx';
 import DashboardMain from './DashboardMain.jsx';
 import './Dashboard.css';
 
@@ -86,6 +87,8 @@ export default function Dashboard() {
   const [topUnit, setTopUnit] = useState(deepLink.unit || 'EA');
   const [activeTab, setActiveTab] = useState(location.state?.tab === 'tableau' ? 'tableau' : 'dashboard');
   const [historyWeeks, setHistoryWeeks] = useState(4);
+  // 모닝 긴급 알림 조치 버튼 → DashboardMain의 결품/급증 상세 모달을 여는 요청
+  const [alertRankRequest, setAlertRankRequest] = useState(null);
 
   const [categoryTree, setCategoryTree] = useState([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
@@ -417,6 +420,13 @@ export default function Dashboard() {
     setSelectedSku(null);
   }
 
+  const clearAlertRankRequest = useCallback(() => setAlertRankRequest(null), []);
+
+  function handleMorningAlertAction(type) {
+    setActiveTab('dashboard');
+    setAlertRankRequest({ rank: type === 'SPIKE' ? 'surge' : 'shortage' });
+  }
+
   function handleLogout() {
     clearSession();
     navigate('/');
@@ -482,6 +492,10 @@ export default function Dashboard() {
               {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
+          <MorningAlertBell
+            alerts={getMorningAlerts(center, operationalDate)}
+            onAction={handleMorningAlertAction}
+          />
           <div className="user-chip">
             <span>👤</span>
             <span>{username}</span>
@@ -524,6 +538,7 @@ export default function Dashboard() {
               transactions={transactions} transactionsLoading={transactionsLoading} transactionsError={transactionsError}
               onSelectCategoryFromRanking={handleSelectCategoryFromRanking}
               historyWeeks={historyWeeks} onHistoryWeeksChange={setHistoryWeeks}
+              alertRankRequest={alertRankRequest} onAlertRankRequestHandled={clearAlertRankRequest}
             />
           )}
           {activeTab === 'tableau' && <TableauView onBack={() => setActiveTab('dashboard')} />}

@@ -1,9 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import KpiCard from '../components/KpiCard.jsx';
 import KpiExplainerModal from '../components/KpiExplainerModal.jsx';
 import MainForecastChart from '../components/MainForecastChart.jsx';
 import HistoryRangeControl from '../components/HistoryRangeControl.jsx';
-import MorningAlerts, { getMorningAlerts } from '../components/MorningAlerts.jsx';
 import {
   CategoryOrProductTop5Card, CategoryOrProductDetail, categoryDrilldownInfo,
   RegionTop5Card, RegionDetail, RegionViewToggle,
@@ -82,10 +81,18 @@ export default function DashboardMain({
   transactions, transactionsLoading, transactionsError,
   onSelectCategoryFromRanking,
   historyWeeks, onHistoryWeeksChange,
+  alertRankRequest, onAlertRankRequestHandled,
 }) {
   const [large, middle, small] = selectedPath;
   const [openKpi, setOpenKpi] = useState(null);
   const [openRank, setOpenRank] = useState(null);
+  // 헤더 🔔 모닝 긴급 알림에서 조치 버튼을 누르면 { rank }가 내려온다. 처리 후 바로 비워서
+  // Tableau 탭을 다녀와 다시 mount될 때 모달이 또 열리지 않게 한다.
+  useEffect(() => {
+    if (!alertRankRequest) return;
+    setOpenRank(alertRankRequest.rank);
+    onAlertRankRequestHandled?.();
+  }, [alertRankRequest, onAlertRankRequestHandled]);
   // 판매 급증 TOP5 카드의 정렬 기준('qty'|'pct') — 상세보기 모달을 열 때 그대로 넘겨줘서
   // 모달 표 기본 정렬도 카드에서 고른 기준과 일치하게 한다.
   const [surgeSortMode, setSurgeSortMode] = useState('qty');
@@ -218,11 +225,6 @@ export default function DashboardMain({
           </p>
         )}
       </div>
-
-      <MorningAlerts
-        alerts={getMorningAlerts(center, operationalDate)}
-        onAction={(type) => setOpenRank(type === 'SPIKE' ? 'surge' : 'shortage')}
-      />
 
       <div style={gridStyle}>
         {/* ── Row 1 ── */}
